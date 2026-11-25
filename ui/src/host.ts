@@ -86,6 +86,8 @@ export interface AutoStatus {
   /** Langue d'écoute (`fr-FR`…), null si Windows n'en a aucune. */
   language: string | null;
   error: string | null;
+  /** Micro écouté : celui choisi dans les Réglages, null : celui par défaut de Windows. */
+  mic?: string | null;
 }
 
 /** Hors d'iBox (aperçu `npm run dev`), des clips d'exemple sans vidéo. */

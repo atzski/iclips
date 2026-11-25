@@ -79,6 +79,7 @@ export function AutoSheet({ onClose }: { onClose: () => void }) {
           </div>
           {voiceError && test !== "missed" && <p className="mt-2 text-[0.85rem] font-bold text-peach-deep">{voiceError}</p>}
           {s?.listening && test !== "listening" && <p className="mt-2 text-[0.85rem] font-bold text-accent-text">{t("Le micro écoute en ce moment.")}</p>}
+          {s && <p className="mt-1 text-[0.8rem] font-semibold text-ink-faint">{s.mic ? t("Micro écouté : {0} (choisi dans les Réglages).", s.mic) : t("Micro écouté : celui par défaut de Windows, ou celui choisi dans les Réglages.")}</p>}
         </Row>
         <Row tone="blue" icon="pad" title={t("Maintenir Vue + A")} on={!!s?.pad} disabled={!s} onToggle={() => toggle("pad")}>
           {t("Sur la manette, pendant la partie, sans ouvrir le panneau.")}

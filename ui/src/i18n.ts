@@ -138,6 +138,8 @@ const EN: Record<string, string> = {
   "Garder aussi un moment du bureau : une vidéo, un appel, un moment drôle. « Clip ça ! » et Vue + A marchent partout.": "Keep a desktop moment too: a video, a call, a funny moment. “Clip that!” and View + A work everywhere.",
   "Pas de partie en cours. Pour garder aussi le bureau : Réglages d’iClips › Partout, pas seulement en jeu.": "No game running. To keep the desktop too: iClips Settings › Everywhere, not just in games.",
   "Bureau": "Desktop",
+  "Micro écouté : {0} (choisi dans les Réglages).": "Microphone heard: {0} (chosen in Settings).",
+  "Micro écouté : celui par défaut de Windows, ou celui choisi dans les Réglages.": "Microphone heard: the Windows default, or the one chosen in Settings.",
   // partage
   "Partager": "Share",
   "Partager le clip": "Share the clip",
