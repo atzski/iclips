@@ -16,6 +16,7 @@ import { dragOut, ShareSheet } from "./Share";
 import { Vertical } from "./Vertical";
 import { SettingsSheet } from "./Settings";
 import { SoundMix } from "./Sound";
+import { hint, KeysSheet, useKeys } from "./keys";
 import { duration, size, when } from "./format";
 import { t } from "./i18n";
 import { useNav } from "./nav";
@@ -49,6 +50,9 @@ export function Studio() {
   const [picked, setPicked] = useState<string[] | null>(null);
   const [auto, setAuto] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [help, setHelp] = useState(false);
+  /** Fiche Partager du lecteur (ici : Échap la ferme seule, pas le lecteur). */
+  const [sharing, setSharing] = useState(false);
 
   const load = useCallback(() => {
     host<Clip[]>("clips.list").then(setClips).catch((e: Error) => { setClips([]); setError(t("Action impossible : {0}", e.message)); });
@@ -99,9 +103,22 @@ export function Studio() {
     try { await host(call, arg); load(); } catch (e) { setError(t("Action impossible : {0}", (e as Error).message)); }
   };
 
+  // galerie : 1 à 4 (filtres), Ctrl+A (assembler), A (automatique), R (réglages) ; ? partout
+  useKeys(!open && !auto && !settings && !help, (k) => {
+    const n = Number(k);
+    if (n >= 1 && n <= FILTERS.length) { setFilter(FILTERS[n - 1]); return true; }
+    if (k === "ctrl+a") { setPicked((p) => (p ? null : [])); return true; }
+    if (k === "a") { setAuto(true); return true; }
+    if (k === "r") { setSettings(true); return true; }
+    return false;
+  });
+  useKeys(!help, (k) => (k === "?" ? (setHelp(true), true) : false));
+
   useNav(() => {
-    if (settings) setSettings(false);
+    if (help) setHelp(false);
+    else if (settings) setSettings(false);
     else if (auto) setAuto(false);
+    else if (sharing) setSharing(false);
     else if (confirm) setConfirm(false);
     else if (open) setOpen(null);
     else if (picked) setPicked(null);
@@ -123,11 +140,12 @@ export function Studio() {
           {clips && <p className="text-[0.85rem] font-semibold text-ink-soft">{clips.length === 1 ? t("1 clip") : t("{0} clips", clips.length)}</p>}
         </div>
         <div role="tablist" className="flex rounded-full bg-white p-1 shadow-sm">
-          {FILTERS.map((f) => (
+          {FILTERS.map((f, i) => (
             <button
               key={f}
               role="tab"
               data-nav
+              title={hint(filterLabel(f), String(i + 1))}
               aria-selected={filter === f}
               onClick={() => setFilter(f)}
               className={`tone-${FILTER_TONE[f]} relative h-9 rounded-full px-4 text-[0.9rem] font-bold transition-colors ${filter === f ? "text-[var(--tone-on)]" : "text-ink-soft hover:text-[var(--tone-ink)]"}`}
@@ -138,9 +156,10 @@ export function Studio() {
             </button>
           ))}
         </div>
-        <Button tone="orange" icon="copy" variant={picked ? "primary" : "soft"} aria-pressed={!!picked} onClick={() => setPicked((p) => (p ? null : []))}>{t("Assembler")}</Button>
-        <Button tone="teal" icon="auto" onClick={() => setAuto(true)}>{t("Automatique")}</Button>
-        <Button tone="orange" icon="gear" onClick={() => setSettings(true)}>{t("Réglages")}</Button>
+        <Button tone="orange" icon="copy" title={hint(t("Assembler"), "Ctrl+A")} variant={picked ? "primary" : "soft"} aria-pressed={!!picked} onClick={() => setPicked((p) => (p ? null : []))}>{t("Assembler")}</Button>
+        <Button tone="teal" icon="auto" title={hint(t("Automatique"), "A")} onClick={() => setAuto(true)}>{t("Automatique")}</Button>
+        <Button tone="orange" icon="gear" title={hint(t("Réglages"), "R")} onClick={() => setSettings(true)}>{t("Réglages")}</Button>
+        <Button tone="blue" variant="ghost" title={hint(t("Raccourcis"), "?")} aria-label={t("Raccourcis")} onClick={() => setHelp(true)} className="px-4 font-extrabold">?</Button>
         <Button tone="red" variant="ghost" icon="x" onClick={() => void host("screen.close")}>{t("Fermer")}</Button>
       </header>
 
@@ -188,12 +207,15 @@ export function Studio() {
             key={current.name}
             clip={current}
             confirm={confirm}
-            onClose={() => { setConfirm(false); setOpen(null); }}
+            onClose={() => { setConfirm(false); setSharing(false); setOpen(null); }}
+            sharing={sharing}
+            setSharing={setSharing}
             onTitle={(title) => void act("clips.update", { name: current.name, title })}
             onFavorite={() => void act("clips.update", { name: current.name, favorite: !current.favorite })}
             onDelete={() => (confirm ? (setConfirm(false), setOpen(null), void act("clips.delete", { name: current.name })) : setConfirm(true))}
             onCancel={() => setConfirm(false)}
             busy={!!job}
+            keys={!auto && !settings && !help}
             onRender={(kind, span, focus) => trim(current, kind, span, focus)}
             onMix={(gameVol, mic) => startRender({ kind: "mix", name: current.name, game: gameVol, mic }, t("Mixage du son…"))}
           />
@@ -202,6 +224,7 @@ export function Studio() {
 
       <AnimatePresence>{auto && <AutoSheet onClose={() => setAuto(false)} />}</AnimatePresence>
       <AnimatePresence>{settings && <SettingsSheet onClose={() => setSettings(false)} />}</AnimatePresence>
+      <AnimatePresence>{help && <KeysSheet onClose={() => setHelp(false)} />}</AnimatePresence>
 
       <AnimatePresence>
         {picked && !open && (
@@ -290,28 +313,50 @@ function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: (
   );
 }
 
-function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCancel, busy, onRender, onMix }: {
+function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCancel, busy, keys, sharing, setSharing, onRender, onMix }: {
   clip: Clip; confirm: boolean; onClose: () => void; onTitle: (t: string) => void; onFavorite: () => void; onDelete: () => void; onCancel: () => void;
-  busy: boolean; onRender: (kind: "mp4" | "gif" | "vertical", span: Span, focus?: number) => void; onMix: (game: number, mic: number) => void;
+  busy: boolean; keys: boolean; sharing: boolean; setSharing: (v: boolean) => void; onRender: (kind: "mp4" | "gif" | "vertical", span: Span, focus?: number) => void; onMix: (game: number, mic: number) => void;
 }) {
   const [title, setTitle] = useState(c.title ?? "");
   const [failed, setFailed] = useState(false);
   /** Couper, ou format vertical (cadre 9:16 à placer sur l'image). */
   const [mode, setMode] = useState<"cut" | "vertical" | "sound" | null>(null);
   const [focus, setFocus] = useState(0.5);
-  const [sharing, setSharing] = useState(false);
   /** Vidéo déjà verticale (ou carrée) : pas de format vertical à en tirer. */
   const [portrait, setPortrait] = useState(false);
   const cutting = mode === "cut" || mode === "vertical";
   const [length, setLength] = useState(c.duration ?? 0);
   const video = useRef<HTMLVideoElement>(null);
   const back = useRef<HTMLButtonElement>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => { if (!note) return; const id = setTimeout(() => setNote(null), 3000); return () => clearTimeout(id); }, [note]);
+  const toggle = (m: "cut" | "vertical" | "sound") => setMode((cur) => (cur === m ? null : m));
+  // lecteur : Espace, J et L, C, V, S, P, F, Suppr, Ctrl+C (I et O : dans Couper)
+  useKeys(keys && !sharing, (k) => {
+    const v = video.current;
+    const media = !isImage(c);
+    switch (k) {
+      case "space": if (v) { if (v.paused) void v.play(); else v.pause(); } return true;
+      case "j": if (v) v.currentTime = Math.max(0, v.currentTime - 1); return true;
+      case "l": if (v) v.currentTime = Math.min(v.duration || 0, v.currentTime + 1); return true;
+      case "c": if (media) toggle("cut"); return true;
+      case "v": if (media && !portrait) toggle("vertical"); return true;
+      case "s": if (media) toggle("sound"); return true;
+      case "p": setSharing(true); return true;
+      case "f": onFavorite(); return true;
+      case "Delete": onDelete(); return true;
+      case "ctrl+c":
+        void host("share.copy", { name: c.name }).then(() => setNote(t("Clip copié : collez-le (Ctrl+V) dans Discord ou un dossier."))).catch((e: Error) => setNote(e.message));
+        return true;
+    }
+    return false;
+  });
   useEffect(() => back.current?.focus(), []);
   const commit = () => { if (title.trim() !== (c.title ?? "")) onTitle(title); };
   const src = clipUrl(c);
   return (
     <motion.div data-nav-scope className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <motion.div role="dialog" aria-modal="true" aria-label={label(c)} className="flex max-h-full w-full max-w-[min(78rem,100%)] flex-col overflow-hidden rounded-xl bg-white shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8 }} transition={SPRING.smooth}>
+      <motion.div role="dialog" aria-modal="true" aria-label={label(c)} className="flex max-h-full w-full max-w-[min(78rem,100%)] flex-col overflow-hidden rounded-xl bg-white shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8, transition: { duration: 0.15 } }} transition={SPRING.smooth}>
         <div className="relative min-h-0 flex-1 bg-black">
           {src && isImage(c) ? (
             <img src={src} alt="" className="mx-auto max-h-[60vh] object-contain" />
@@ -337,11 +382,11 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
             onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
             className="h-11 min-w-0 flex-1 rounded-full bg-cream-deep px-5 text-[0.95rem] font-bold text-ink outline-none placeholder:text-ink-faint"
           />
-          {!isImage(c) && <Button tone="orange" icon="sound" aria-pressed={mode === "sound"} variant={mode === "sound" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "sound" ? null : "sound"))}>{t("Son")}</Button>}
-          {!isImage(c) && <Button tone="orange" icon="cut" aria-pressed={mode === "cut"} variant={mode === "cut" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "cut" ? null : "cut"))}>{t("Couper")}</Button>}
-          {!isImage(c) && !portrait && <Button tone="pink" icon="phone" aria-pressed={mode === "vertical"} variant={mode === "vertical" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "vertical" ? null : "vertical"))}>{t("Vertical")}</Button>}
-          <Button tone="green" variant="primary" icon="share" onClick={() => setSharing(true)}>{t("Partager")}</Button>
-          <Button tone="yellow" icon="star" filled={c.favorite} onClick={onFavorite} aria-pressed={c.favorite}>{c.favorite ? t("Retirer des favoris") : t("Ajouter aux favoris")}</Button>
+          {!isImage(c) && <Button tone="orange" icon="sound" title={hint(t("Son"), "S")} aria-pressed={mode === "sound"} variant={mode === "sound" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "sound" ? null : "sound"))}>{t("Son")}</Button>}
+          {!isImage(c) && <Button tone="orange" icon="cut" title={hint(t("Couper"), "C")} aria-pressed={mode === "cut"} variant={mode === "cut" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "cut" ? null : "cut"))}>{t("Couper")}</Button>}
+          {!isImage(c) && !portrait && <Button tone="pink" icon="phone" title={hint(t("Vertical"), "V")} aria-pressed={mode === "vertical"} variant={mode === "vertical" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "vertical" ? null : "vertical"))}>{t("Vertical")}</Button>}
+          <Button tone="green" variant="primary" icon="share" title={hint(t("Partager"), "P")} onClick={() => setSharing(true)}>{t("Partager")}</Button>
+          <Button tone="yellow" icon="star" title={hint(t("Favori"), "F")} filled={c.favorite} onClick={onFavorite} aria-pressed={c.favorite}>{c.favorite ? t("Retirer des favoris") : t("Ajouter aux favoris")}</Button>
           {confirm ? (
             <>
               <span className="text-[0.9rem] font-bold text-ink">{t("Supprimer ce clip ? Il est effacé de ce PC.")}</span>
@@ -349,12 +394,16 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
               <Button tone="blue" variant="ghost" onClick={onCancel}>{t("Annuler")}</Button>
             </>
           ) : (
-            <Button tone="red" icon="trash" onClick={onDelete}>{t("Supprimer")}</Button>
+            <Button tone="red" icon="trash" title={hint(t("Supprimer"), t("Suppr"))} onClick={onDelete}>{t("Supprimer")}</Button>
           )}
         </div>
         {mode === "sound" && <SoundMix clip={c} video={video} busy={busy} onMix={onMix} />}
         {cutting && <Trim key={mode} video={video} src={src} length={length} busy={busy} vertical={mode === "vertical"} onRender={(kind, span) => onRender(kind, span, focus)} />}
-        <div className="px-6 pb-4 text-[0.8rem] font-semibold text-ink-soft">{[c.game, when(c.at), size(c.size), c.auto ? autoLabel(c.auto) : null].filter(Boolean).join(" · ")}</div>
+        <div className="flex items-center gap-3 px-6 pb-4 text-[0.8rem] font-semibold text-ink-soft">
+          <span className="min-w-0 flex-1 truncate">{[c.game, when(c.at), size(c.size), c.auto ? autoLabel(c.auto) : null].filter(Boolean).join(" · ")}</span>
+          <AnimatePresence>{note && <motion.span role="status" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={SPRING.snappy} className="font-bold text-accent-text">{note}</motion.span>}</AnimatePresence>
+          <span className="shrink-0 text-ink-faint">{t("? : raccourcis")}</span>
+        </div>
       </motion.div>
       <AnimatePresence>
         {sharing && <ShareSheet clip={c} onClose={() => setSharing(false)} onVertical={isImage(c) || portrait ? null : () => { setSharing(false); setMode("vertical"); }} />}

@@ -60,7 +60,7 @@ export function AutoSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <motion.div data-nav-scope className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <motion.div role="dialog" aria-modal="true" aria-label={t("Clips automatiques")} className="flex max-h-full w-full max-w-[40rem] flex-col gap-2 overflow-y-auto rounded-xl bg-white p-6 shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8 }} transition={SPRING.smooth}>
+      <motion.div role="dialog" aria-modal="true" aria-label={t("Clips automatiques")} className="flex max-h-full w-full max-w-[40rem] flex-col gap-2 overflow-y-auto rounded-xl bg-white p-6 shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8, transition: { duration: 0.15 } }} transition={SPRING.smooth}>
         <header className="mb-2 flex items-center gap-3">
           <Button ref={back} tone="blue" icon="back" variant="ghost" onClick={onClose} aria-label={t("Retour")} className="px-3" />
           <div className="min-w-0 flex-1">

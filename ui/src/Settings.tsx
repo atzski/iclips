@@ -11,6 +11,7 @@ import { size } from "./format";
 import { t } from "./i18n";
 import { Button, Pill, type IconName, type Tone } from "./ui";
 import { Slider, Switch } from "./controls";
+import { groups, Kbd } from "./keys";
 
 const SECONDS = [15, 30, 60, 120];
 const QUALITIES: { value: Quality; label: string; hint: string }[] = [
@@ -43,7 +44,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <motion.div data-nav-scope className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <motion.div role="dialog" aria-modal="true" aria-label={t("Réglages")} className="flex max-h-full w-full max-w-[48rem] flex-col gap-4 overflow-y-auto rounded-xl bg-white p-6 shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8 }} transition={SPRING.smooth}>
+      <motion.div role="dialog" aria-modal="true" aria-label={t("Réglages")} className="flex max-h-full w-full max-w-[48rem] flex-col gap-4 overflow-y-auto rounded-xl bg-white p-6 shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8, transition: { duration: 0.15 } }} transition={SPRING.smooth}>
         <header className="flex items-center gap-3">
           <Button ref={back} tone="blue" icon="back" variant="ghost" onClick={onClose} aria-label={t("Retour")} className="px-3" />
           <h2 className="flex-1 font-display text-[1.35rem] leading-tight text-ink">{t("Réglages")}</h2>
@@ -90,12 +91,9 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
 
         <Section tone="blue" icon="pad" title={t("Raccourcis")}>
           <ul className="grid grid-cols-2 gap-2 text-[0.88rem] font-semibold text-ink-soft">
-            <Key keys="Alt+X" what={t("Ouvrir le panneau (raccourci de l’overlay d’iBox)")} />
-            <Key keys="Alt+V" what={t("Ouvrir le panneau")} />
-            <Key keys={t("Vue + X")} what={t("Ouvrir le panneau à la manette")} />
-            <Key keys={t("Vue + A")} what={t("Garder le clip tout de suite (Automatique)")} />
-            <Key keys={t("« Clip ça ! »")} what={t("Garder le clip à la voix (Automatique)")} />
+            {groups(s?.overlayKeys)[0].items.map(([k, what]) => <Key key={what} keys={k} what={what} />)}
           </ul>
+          <p className="text-[0.8rem] font-semibold text-ink-faint">{s && !s.overlayKeys ? t("Le raccourci de l’overlay est coupé dans iBox (Paramètres › Système).") : t("Il se change dans iBox, Paramètres › Système. Touche ? : tous les raccourcis du Studio.")}</p>
         </Section>
 
         <Section tone="teal" icon="folder" title={t("Stockage")}>
@@ -155,7 +153,7 @@ function Track({ label, hint, on, volume, onToggle, onVolume }: { label: string;
 function Key({ keys, what }: { keys: string; what: string }) {
   return (
     <li className="flex items-center gap-3 rounded-lg bg-cream-deep/60 px-3 py-2">
-      <kbd className="shrink-0 rounded-md bg-white px-2 py-0.5 text-[0.8rem] font-extrabold text-ink shadow-sm">{keys}</kbd>
+      <Kbd>{keys}</Kbd>
       <span className="min-w-0">{what}</span>
     </li>
   );

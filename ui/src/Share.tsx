@@ -90,7 +90,7 @@ export function ShareSheet({ clip: c, onClose, onVertical }: { clip: Clip; onClo
 
   return (
     <motion.div data-nav-scope className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <motion.div role="dialog" aria-modal="true" aria-label={t("Partager le clip")} className="flex max-h-full w-full max-w-[44rem] flex-col gap-4 overflow-y-auto rounded-xl bg-white p-6 shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8 }} transition={SPRING.smooth}>
+      <motion.div role="dialog" aria-modal="true" aria-label={t("Partager le clip")} className="flex max-h-full w-full max-w-[44rem] flex-col gap-4 overflow-y-auto rounded-xl bg-white p-6 shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8, transition: { duration: 0.15 } }} transition={SPRING.smooth}>
         <header className="flex items-center gap-3">
           <Button ref={back} tone="blue" icon="back" variant="ghost" onClick={onClose} aria-label={t("Retour")} className="px-3" />
           <h2 className="flex-1 font-display text-[1.35rem] leading-tight text-ink">{t("Partager le clip")}</h2>

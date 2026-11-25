@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clipUrl, host, onHost, shotUrl, type ClipStatus } from "./host";
 import { playClip } from "./shutter";
+import { useKeys } from "./keys";
 import { t } from "./i18n";
 import { SPRING } from "./ibox/motion";
 import { padAction, useNav } from "./nav";
@@ -81,6 +82,11 @@ export function Panel() {
       setError((e as Error).message);
     }
   };
+  // C : garder l'image figée (Entrée garde le clip, bouton qui a le focus)
+  useKeys(open, (k) => {
+    if (k === "c" && status?.hasShot && !shotKept) { void saveShot(); return true; }
+    return false;
+  });
   const update = (patch: Partial<Pick<Saved, "title" | "favorite">>) => {
     if (!saved) return;
     setSaved({ ...saved, ...patch });
@@ -175,7 +181,7 @@ export function Panel() {
             </div>
 
             {error && <p role="alert" className="text-[0.85rem] font-bold text-peach-deep">{error}</p>}
-            <p className="text-[0.75rem] font-semibold text-ink-faint">{t("Alt+X, Alt+V ou Vue + X : ouvrir et fermer")}</p>
+            <p className="text-[0.75rem] font-semibold text-ink-faint">{t("Raccourci de l’overlay d’iBox ou Vue + X : ouvrir et fermer · C : garder la capture")}</p>
           </motion.aside>
         )}
       </AnimatePresence>

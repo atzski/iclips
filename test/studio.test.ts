@@ -113,3 +113,20 @@ describe("partage", () => {
     expect(frameLeft(1, frame)).toBeCloseTo(1 - frame);
   });
 });
+
+describe("raccourcis", () => {
+  it("nomment les touches comme les gestionnaires les attendent", async () => {
+    const { keyName } = await import("../ui/src/keys");
+    expect(keyName({ key: " ", ctrlKey: false })).toBe("space");
+    expect(keyName({ key: "C", ctrlKey: false })).toBe("c");
+    expect(keyName({ key: "c", ctrlKey: true })).toBe("ctrl+c");
+    expect(keyName({ key: "Delete", ctrlKey: false })).toBe("Delete");
+    expect(keyName({ key: "?", ctrlKey: false })).toBe("?");
+  });
+
+  it("affichent le vrai raccourci de l'overlay d'iBox", async () => {
+    const { groups } = await import("../ui/src/keys");
+    expect(groups("Ctrl+Shift+X")[0].items[0][0]).toBe("Ctrl+Shift+X");
+    expect(groups(null)[0].items[0][0]).toBe("Alt+X");
+  });
+});

@@ -1,7 +1,7 @@
 {
   "id": "iclips",
   "name": "iClips",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "author": {
     "name": "atzski",
     "username": "atzski"
@@ -19,7 +19,6 @@
     "clips-share",
     "clips-settings",
     "overlay",
-    "hotkey",
     "gamepad"
   ],
   "screen": {
@@ -30,7 +29,6 @@
     "entry": "ui/panel.html",
     "side": "right",
     "width": 480,
-    "hotkey": "Alt+V",
     "padCombo": [
       "back",
       "x"
