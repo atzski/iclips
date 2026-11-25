@@ -25,13 +25,23 @@ pub fn same_device(sapi: &str, endpoint: &str) -> bool {
     !a.is_empty() && (a == b || b.starts_with(&a) || a.starts_with(&b))
 }
 
-/// Reconnaissance acceptée : confiance « haute » du moteur et score d'au moins 0,8. Avec une
-/// grammaire de deux phrases, le moteur range presque tout ce qu'il entend (musique, sonneries,
-/// dialogues d'un jeu) sous « Clip ça ! » en confiance « normale » (score 0,5 à 0,77 mesuré) :
-/// c'était la boucle de clips de la 1.0.10. La vraie phrase sort en « haute » (0,90).
-pub fn accepted(confidence: i8, engine: f32) -> bool {
-    confidence >= 1 && engine >= 0.8
+/// Reconnaissance de la phrase acceptée. Seule, une grammaire de deux phrases range presque tout
+/// ce que le moteur entend (musique, sonneries, dialogues d'un jeu) sous « Clip ça ! » en
+/// confiance « normale », score 0,5 à 0,77 : la boucle de clips de la 1.0.10. Avec la dictée
+/// concurrente (`rival`), ces sons partent en dictée et la phrase dite au micro sort en « normale »
+/// (0,57 à 0,78 mesuré sur une vraie voix, 3 fois sur 5 ; les 2 autres en « faible », refusées,
+/// comme les phrases ordinaires qui tombent parfois sur la grammaire). Sans dictée (moteur qui ne
+/// la propose pas) : « haute » et score 0,8, seuil seul.
+pub fn accepted(confidence: i8, engine: f32, rival: bool) -> bool {
+    if rival {
+        confidence >= 0
+    } else {
+        confidence >= 1 && engine >= 0.8
+    }
 }
+
+/// Identifiant de la grammaire de dictée concurrente.
+const DICTATION: u64 = 1;
 
 pub struct Listener {
     /// Langue écoutée (`fr-FR`…).
@@ -136,7 +146,7 @@ mod imp {
             .collect()
     }
 
-    unsafe fn prepare(langs: &[&str], phrases: &[&str], input: Input) -> Result<(ISpRecognizer, ISpRecoContext, ISpRecoGrammar), String> {
+    unsafe fn prepare(langs: &[&str], phrases: &[&str], input: Input) -> Result<(ISpRecognizer, ISpRecoContext, ISpRecoGrammar, Option<ISpRecoGrammar>), String> {
         let e = |e: windows::core::Error| format!("moteur vocal : {}", e.message());
         let rec: ISpRecognizer = CoCreateInstance(&SpInprocRecognizer, None, CLSCTX_ALL).map_err(e)?;
         let engine = langs
@@ -174,13 +184,19 @@ mod imp {
         }
         g.Commit(0).map_err(e)?;
         g.SetRuleState(PCWSTR::null(), std::ptr::null_mut(), SPRS_ACTIVE).map_err(e)?;
+        // concurrente : la dictée libre (grammaire 1) absorbe ce qui n'est pas la phrase. Seule,
+        // la grammaire de deux phrases range presque tout son entendu sous « Clip ça ! ».
+        let free = ctx.CreateGrammar(super::DICTATION).ok().filter(|d| d.LoadDictation(PCWSTR::null(), SPLO_STATIC).is_ok() && d.SetDictationState(SPRS_ACTIVE).is_ok());
+        if free.is_none() {
+            eprintln!("iClips : dictée indisponible pour « Clip ça ! » : seuil seul");
+        }
         rec.SetRecoState(SPRST_ACTIVE).map_err(e)?;
-        Ok((rec, ctx, g))
+        Ok((rec, ctx, g, free))
     }
 
     pub unsafe fn run(langs: &[&str], phrases: &[&str], input: Input, stop: &AtomicBool, ready: &std::sync::mpsc::Sender<Result<(), String>>, on_heard: &dyn Fn()) {
         let com = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok();
-        let (rec, ctx, _grammar) = match prepare(langs, phrases, input) {
+        let (rec, ctx, _grammar, free) = match prepare(langs, phrases, input) {
             Ok(v) => v,
             Err(err) => {
                 let _ = ready.send(Err(err));
@@ -206,11 +222,13 @@ mod imp {
                     if let Ok(phrase) = result.GetPhrase() {
                         let confidence = (*phrase).Base.Rule.Confidence;
                         let engine = (*phrase).Base.Rule.SREngineConfidence;
+                        let ours = (*phrase).Base.ullGrammarID != super::DICTATION;
                         CoTaskMemFree(Some(phrase as *const _));
+                        let ok = ours && super::accepted(confidence, engine, free.is_some());
                         if std::env::var_os("IBOX_VOICE_DEBUG").is_some() {
-                            println!("  reconnu : confiance {confidence}, moteur {engine:.3}");
+                            println!("  reconnu : {}, confiance {confidence}, moteur {engine:.3}, accepté {ok}", if ours { "phrase" } else { "dictée" });
                         }
-                        if super::accepted(confidence, engine) {
+                        if ok {
                             on_heard();
                         }
                     }
@@ -255,7 +273,27 @@ mod tests {
         assert!(!same_device("", "Microphone (Yeti Classic)"));
         assert_eq!(sapi_language("fr-FR")[0], "40C");
         assert_eq!(sapi_language("en-US")[0], "409");
-        assert!(accepted(1, 0.90) && !accepted(0, 0.77) && !accepted(1, 0.6) && !accepted(-1, 0.9));
+        assert!(accepted(1, 0.90, false) && !accepted(0, 0.77, false) && !accepted(1, 0.6, false) && !accepted(-1, 0.9, false));
+        assert!(accepted(0, 0.6, true) && !accepted(-1, 0.9, true));
+    }
+
+    /// Moteur réel sur le micro (`IBOX_VOICE_MIC` : nom, sinon celui par défaut), pendant
+    /// `IBOX_VOICE_SECS` s (60) : affiche chaque reconnaissance avec sa confiance et son score
+    /// (`IBOX_VOICE_DEBUG=1`), pour régler `accepted` sur une vraie voix.
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn sapi_micro() {
+        let name = std::env::var("IBOX_VOICE_MIC").ok().or_else(|| {
+            crate::remote_play::audio::endpoints(true).into_iter().find(|e| e.default).map(|e| e.name)
+        }).expect("aucun micro");
+        let secs: u64 = std::env::var("IBOX_VOICE_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(60);
+        println!("micro : {name} ; micros SAPI : {:?}", inputs());
+        let t0 = std::time::Instant::now();
+        let l = Listener::start("fr-FR", crate::voice::phrases("fr-FR"), Input::Device(name), move || println!("  ACCEPTÉ à {:.1} s", t0.elapsed().as_secs_f32())).expect("moteur");
+        println!("écoute {secs} s");
+        std::thread::sleep(std::time::Duration::from_secs(secs));
+        drop(l);
     }
 
     /// Moteur réel sur un dossier de fichiers (`IBOX_VOICE_NOISE`) : combien de « Clip ça ! »
