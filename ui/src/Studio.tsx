@@ -7,7 +7,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SPRING } from "./ibox/motion";
-import { clipUrl, host, onHost, thumbUrl, type Clip } from "./host";
+import { clipUrl, host, onHost, standalone, thumbUrl, type Clip } from "./host";
 import { makeThumb } from "./thumbs";
 import { joinSegments, useRender, type Span } from "./edit";
 import { Trim } from "./Trim";
@@ -450,7 +450,7 @@ function Empty({ favorites }: { favorites: boolean }) {
         <img src={logo} alt="" className="mx-auto mb-5 h-24 w-24 opacity-90" />
         <h2 className="font-display text-[1.3rem] text-ink">{favorites ? t("Aucun favori") : t("Aucun clip pour l’instant")}</h2>
         <p className="mt-2 text-[0.95rem] font-semibold text-ink-soft">
-          {favorites ? t("Marquez un clip d’une étoile pour le retrouver ici.") : t("Pendant une partie, ouvrez l’overlay d’iBox et gardez les dernières secondes : le clip arrive ici.")}
+          {favorites ? t("Marquez un clip d’une étoile pour le retrouver ici.") : standalone ? t("Pendant une partie, ouvrez le panneau (Alt+X) ou dites « Clip ça ! » : le clip arrive ici.") : t("Pendant une partie, ouvrez l’overlay d’iBox et gardez les dernières secondes : le clip arrive ici.")}
         </p>
       </div>
     </div>

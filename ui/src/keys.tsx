@@ -5,7 +5,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { SPRING } from "./ibox/motion";
-import { host, type CaptureSettings } from "./host";
+import { host, standalone, type CaptureSettings } from "./host";
 import { t } from "./i18n";
 import { Button, Pill, type IconName, type Tone } from "./ui";
 
@@ -43,7 +43,7 @@ type Group = { title: string; icon: IconName; tone: Tone; items: [string, string
 export function groups(overlayKeys: string | null | undefined): Group[] {
   return [
     { title: t("Partout"), icon: "auto", tone: "accent", items: [
-      [overlayKeys ?? "Alt+X", t("Ouvrir le panneau en jeu (raccourci de l’overlay d’iBox)")],
+      [overlayKeys ?? "Alt+X", standalone ? t("Ouvrir le panneau en jeu") : t("Ouvrir le panneau en jeu (raccourci de l’overlay d’iBox)")],
       [t("Vue + X"), t("Ouvrir le panneau à la manette")],
       [t("Vue + A"), t("Garder le clip tout de suite (Automatique)")],
       [t("« Clip ça ! »"), t("Garder le clip à la voix (Automatique)")],

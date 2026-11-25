@@ -6,7 +6,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { SPRING } from "./ibox/motion";
-import { host, onHost, type AutoStatus } from "./host";
+import { host, onHost, standalone, type AutoStatus } from "./host";
 import { t } from "./i18n";
 import { Button, Pill, type IconName, type Tone } from "./ui";
 
@@ -65,7 +65,7 @@ export function AutoSheet({ onClose }: { onClose: () => void }) {
           <Button ref={back} tone="blue" icon="back" variant="ghost" onClick={onClose} aria-label={t("Retour")} className="px-3" />
           <div className="min-w-0 flex-1">
             <h2 className="font-display text-[1.35rem] leading-tight text-ink">{t("Clips automatiques")}</h2>
-            <p className="text-[0.85rem] font-semibold text-ink-soft">{t("Pendant vos parties, iBox garde le clip sans que vous quittiez le jeu.")}</p>
+            <p className="text-[0.85rem] font-semibold text-ink-soft">{standalone ? t("Pendant vos parties, iClips garde le clip sans que vous quittiez le jeu.") : t("Pendant vos parties, iBox garde le clip sans que vous quittiez le jeu.")}</p>
           </div>
         </header>
 

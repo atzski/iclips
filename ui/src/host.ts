@@ -90,8 +90,30 @@ export interface AutoStatus {
   mic?: string | null;
 }
 
+/** Réglages de l'app autonome (`app.get`, `app.set`) : sans iBox, l'app les garde elle-même. */
+export interface AppSettings {
+  version: string;
+  autostart: boolean;
+  /** Raccourci du panneau (null : coupé), déjà pris par une autre application, celui par défaut. */
+  keys: string | null;
+  keysTaken: boolean;
+  keysDefault: string;
+  folder: string | null;
+  folderDefault: boolean;
+  /** null : langue de Windows ; thème null : sombre. */
+  lang: "fr" | "en" | null;
+  theme: "dark" | "light" | null;
+}
+
 /** Hors d'iBox (aperçu `npm run dev`), des clips d'exemple sans vidéo. */
 const inIbox = typeof location !== "undefined" && (location.hostname === "iboxplugin.localhost" || location.protocol === "iboxplugin:");
+
+/**
+ * Interface servie par l'app autonome iClips (`app/`, même protocole qu'iBox, `?app=1`) : pas de
+ * compte iNetbox (ni ami ni Communauté), réglages de l'application en plus. `?app=1` marche aussi
+ * dans l'aperçu.
+ */
+export const standalone = typeof location !== "undefined" && new URLSearchParams(location.search).get("app") === "1";
 
 let sample: Clip[] = [
   { name: "1764060000000-hollow-knight.mp4", game: "Hollow Knight", platformId: "pc", at: Date.now() - 3_600_000, size: 18_400_000, title: "Mante sans un coup", favorite: true, src: "" },
@@ -104,8 +126,14 @@ let capture: CaptureSettings = { enabled: true, quality: "high", seconds: 30, sy
   outputs: [{ id: "o1", name: "Casque (USB)", default: true }, { id: "o2", name: "Haut-parleurs (Realtek)", default: false }],
   inputs: [{ id: "i1", name: "Micro du casque (USB)", default: true }, { id: "i2", name: "Micro de bureau (USB)", default: false }] };
 let auto: AutoStatus = { voice: true, pad: true, end: false, listening: false, language: "fr-FR", error: null };
+let appSettings: AppSettings = { version: "0.8.0", autostart: false, keys: "Alt+X", keysTaken: false, keysDefault: "Alt+X", folder: "C:\\Users\\apercu\\Videos\\iClips", folderDefault: true, lang: null, theme: null };
 
 function preview(call: string, arg: Record<string, unknown>): unknown {
+  if (call === "app.get" || call === "app.folder") return appSettings;
+  if (call === "app.set") {
+    appSettings = { ...appSettings, ...(arg as Partial<AppSettings>) };
+    return appSettings;
+  }
   if (call === "clips.list") return sample;
   if (call === "clips.update") {
     sample = sample.map((c) => (c.name === arg.name ? { ...c, ...(arg.title !== undefined ? { title: String(arg.title).trim() || null } : {}), ...(arg.favorite !== undefined ? { favorite: !!arg.favorite } : {}) } : c));

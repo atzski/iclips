@@ -10,7 +10,7 @@
  */
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { clipUrl, host, onHost, shotUrl, type ClipStatus } from "./host";
+import { clipUrl, host, onHost, shotUrl, standalone, type ClipStatus } from "./host";
 import { playClip } from "./shutter";
 import { useKeys } from "./keys";
 import { t } from "./i18n";
@@ -21,7 +21,10 @@ import logo from "./logo.png";
 
 const params = new URLSearchParams(location.search);
 const side = params.get("side") === "left" ? "left" : "right";
-const width = Math.min(900, Math.max(240, Number(params.get("width")) || 480));
+// largeur du manifeste en px pour une police de 16 px : la police racine grandit avec l'écran
+// (styles.css, jusqu'à 24 px), la carte suit (sinon tout déborde en 1440p et 4K)
+const rem = typeof document !== "undefined" ? parseFloat(getComputedStyle(document.documentElement).fontSize) || 16 : 16;
+const width = Math.round(Math.min(900, Math.max(240, Number(params.get("width")) || 480)) * Math.max(1, rem / 16));
 
 interface Saved { name: string; game: string | null; src: string; title: string; favorite: boolean }
 
@@ -179,12 +182,12 @@ export function Panel() {
               </section>
             )}
             <div className="grid grid-cols-2 gap-2">
-              {!saved && <Button tone="blue" variant="soft" icon="play" onClick={() => void host("screen.open")}>{t("Ouvrir le Studio")}</Button>}
-              <Button tone="green" variant="soft" icon="globe" className={saved ? "col-span-2" : ""} onClick={() => void host("community.open")}>{t("Communauté")}</Button>
+              {!saved && <Button tone="blue" variant="soft" icon="play" className={standalone ? "col-span-2" : ""} onClick={() => void host("screen.open")}>{t("Ouvrir le Studio")}</Button>}
+              {!standalone && <Button tone="green" variant="soft" icon="globe" className={saved ? "col-span-2" : ""} onClick={() => void host("community.open")}>{t("Communauté")}</Button>}
             </div>
 
             {error && <p role="alert" className="text-[0.85rem] font-bold text-peach-deep">{error}</p>}
-            <p className="text-[0.75rem] font-semibold text-ink-faint">{t("Raccourci de l’overlay d’iBox ou Vue + X : ouvrir et fermer · C : garder la capture")}</p>
+            <p className="text-[0.75rem] font-semibold text-ink-faint">{standalone ? t("Raccourci du panneau ou Vue + X : ouvrir et fermer · C : garder la capture") : t("Raccourci de l’overlay d’iBox ou Vue + X : ouvrir et fermer · C : garder la capture")}</p>
           </motion.aside>
         )}
       </AnimatePresence>

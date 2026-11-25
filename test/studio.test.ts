@@ -130,3 +130,20 @@ describe("raccourcis", () => {
     expect(groups(null)[0].items[0][0]).toBe("Alt+X");
   });
 });
+
+describe("app autonome", () => {
+  it("écrit le raccourci du panneau comme l'app l'attend", async () => {
+    const { combo } = await import("../ui/src/Settings");
+    const k = (code: string, key: string, m: { ctrlKey?: boolean; altKey?: boolean; shiftKey?: boolean; metaKey?: boolean } = {}) =>
+      combo({ code, key, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, ...m });
+    expect(k("KeyX", "x", { altKey: true })).toBe("Alt+X");
+    // AZERTY : la touche A est à la place du Q, Windows la nomme A
+    expect(k("KeyQ", "a", { ctrlKey: true, shiftKey: true })).toBe("Ctrl+Maj+A");
+    expect(k("F9", "F9", { ctrlKey: true })).toBe("Ctrl+F9");
+    expect(k("Digit1", "&", { altKey: true })).toBe("Alt+1");
+    // une touche seule, Maj seule ou une touche inconnue : refusé
+    expect(k("KeyX", "x")).toBeNull();
+    expect(k("KeyX", "X", { shiftKey: true })).toBeNull();
+    expect(k("Semicolon", ";", { altKey: true })).toBeNull();
+  });
+});

@@ -6,7 +6,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { SPRING } from "./ibox/motion";
-import { host, type CaptureSettings, type Quality } from "./host";
+import { host, standalone, type AppSettings, type CaptureSettings, type Quality } from "./host";
 import { size } from "./format";
 import { t } from "./i18n";
 import { Button, Pill, type IconName, type Tone } from "./ui";
@@ -55,7 +55,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             <div className="min-w-0 flex-1">
               <div className="text-[0.95rem] font-extrabold text-ink">{t("Mémoire des clips")}</div>
               <div className="text-[0.82rem] font-semibold text-ink-soft">
-                {s && !s.enabled ? t("Coupée : aucun clip ne peut être gardé pendant vos parties.") : t("Pendant vos parties, iBox garde les dernières secondes pour en faire un clip.")}
+                {s && !s.enabled ? t("Coupée : aucun clip ne peut être gardé pendant vos parties.") : standalone ? t("Pendant vos parties, iClips garde les dernières secondes pour en faire un clip.") : t("Pendant vos parties, iBox garde les dernières secondes pour en faire un clip.")}
               </div>
             </div>
             {s && <Switch label={t("Mémoire des clips")} on={s.enabled} onChange={(v) => set({ enabled: v })} />}
@@ -105,7 +105,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           <ul className="grid grid-cols-2 gap-2 text-[0.88rem] font-semibold text-ink-soft">
             {groups(s?.overlayKeys)[0].items.map(([k, what]) => <Key key={what} keys={k} what={what} />)}
           </ul>
-          <p className="text-[0.8rem] font-semibold text-ink-faint">{s && !s.overlayKeys ? t("Le raccourci de l’overlay est coupé dans iBox (Paramètres › Système).") : t("Il se change dans iBox, Paramètres › Système. Touche ? : tous les raccourcis du Studio.")}</p>
+          {standalone ? <ShortcutEditor onChange={(keys) => s && setS({ ...s, overlayKeys: keys })} /> : <p className="text-[0.8rem] font-semibold text-ink-faint">{s && !s.overlayKeys ? t("Le raccourci de l’overlay est coupé dans iBox (Paramètres › Système).") : t("Il se change dans iBox, Paramètres › Système. Touche ? : tous les raccourcis du Studio.")}</p>}
         </Section>
 
         <Section tone="teal" icon="folder" title={t("Stockage")}>
@@ -113,7 +113,9 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             <span className="flex-1 text-[0.92rem] font-bold text-ink">{s ? t("{0} fichiers · {1}", s.count, size(s.bytes)) : "…"}</span>
             <Button tone="teal" icon="folder" onClick={() => void host("capture.folder").catch((e: Error) => setError(e.message))}>{t("Ouvrir le dossier")}</Button>
           </div>
+          {standalone && <FolderRow onChange={() => host<CaptureSettings>("capture.get").then(setS).catch(() => undefined)} />}
         </Section>
+        {standalone && <AppSection />}
         {error && <p role="alert" className="text-[0.85rem] font-bold text-peach-deep">{t("Action impossible : {0}", error)}</p>}
       </motion.div>
     </motion.div>
@@ -179,5 +181,115 @@ function Key({ keys, what }: { keys: string; what: string }) {
       <Kbd>{keys}</Kbd>
       <span className="min-w-0">{what}</span>
     </li>
+  );
+}
+
+// ——— App autonome (sans iBox) : réglages de l'application ———
+
+/** Nom de touche compris par l'app (`shortcut.rs`) ; null : touche refusée. */
+export function hotkeyKey(e: Pick<KeyboardEvent, "code" | "key">): string | null {
+  if (/^Key[A-Z]$/.test(e.code)) return /^[a-z]$/i.test(e.key) ? e.key.toUpperCase() : e.code.slice(3);
+  if (/^Digit[0-9]$/.test(e.code)) return e.code.slice(5);
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(e.code)) return e.code;
+  const named = ["Pause", "ScrollLock", "Insert", "Delete", "Home", "End", "PageUp", "PageDown", "Space"];
+  return named.includes(e.code) ? e.code : null;
+}
+
+/** Combinaison écrite comme dans l'app (« Ctrl+Maj+F9 ») ; null tant qu'il manque Ctrl, Alt ou Win. */
+export function combo(e: Pick<KeyboardEvent, "code" | "key" | "ctrlKey" | "altKey" | "shiftKey" | "metaKey">): string | null {
+  const key = hotkeyKey(e);
+  if (!key || !(e.ctrlKey || e.altKey || e.metaKey)) return null;
+  return [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Maj", e.metaKey && "Win", key].filter(Boolean).join("+");
+}
+
+function ShortcutEditor({ onChange }: { onChange: (keys: string | null) => void }) {
+  const [a, setA] = useState<AppSettings | null>(null);
+  const [listening, setListening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { host<AppSettings>("app.get").then(setA).catch((e: Error) => setError(e.message)); }, []);
+  const apply = (keys: string | null) => {
+    setListening(false);
+    void host("app.keys.suspend", { suspended: false });
+    host<AppSettings>("app.set", { keys }).then((r) => { setA(r); onChange(r.keys); setError(null); }).catch((e: Error) => setError(e.message));
+  };
+  useEffect(() => {
+    if (!listening) return;
+    void host("app.keys.suspend", { suspended: true });
+    const down = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") { setListening(false); void host("app.keys.suspend", { suspended: false }); return; }
+      const keys = combo(e);
+      if (keys) apply(keys);
+    };
+    window.addEventListener("keydown", down, true);
+    return () => window.removeEventListener("keydown", down, true);
+  }, [listening]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-cream-deep/60 px-4 py-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1 text-[0.95rem] font-extrabold text-ink">{t("Raccourci du panneau")}</span>
+        {listening ? <span className="text-[0.9rem] font-bold text-accent-text" aria-live="polite">{t("Appuyez sur la combinaison… (Échap : annuler)")}</span> : <Kbd>{a?.keys ?? t("Coupé")}</Kbd>}
+        <Button tone="blue" icon="gear" onClick={() => setListening(true)} disabled={listening}>{t("Changer")}</Button>
+        {a && a.keys !== a.keysDefault && <Button tone="blue" variant="ghost" onClick={() => apply(a.keysDefault)}>{t("Par défaut")}</Button>}
+        {a?.keys && <Button tone="red" variant="ghost" onClick={() => apply(null)}>{t("Désactiver")}</Button>}
+      </div>
+      {a?.keysTaken && <p role="alert" className="text-[0.82rem] font-bold text-peach-deep">{t("Déjà utilisé par une autre application (iBox ?) : choisissez-en un autre.")}</p>}
+      <p className="text-[0.8rem] font-semibold text-ink-faint">{t("Ctrl, Alt ou Win, plus une touche. Touche ? : tous les raccourcis du Studio.")}</p>
+      {error && <p role="alert" className="text-[0.82rem] font-bold text-peach-deep">{error}</p>}
+    </div>
+  );
+}
+
+function FolderRow({ onChange }: { onChange: () => void }) {
+  const [a, setA] = useState<AppSettings | null>(null);
+  useEffect(() => { host<AppSettings>("app.get").then(setA).catch(() => undefined); }, []);
+  const done = (r: AppSettings) => { setA(r); onChange(); };
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg bg-cream-deep/60 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[0.95rem] font-extrabold text-ink">{t("Dossier des clips")}</div>
+        <div className="truncate text-[0.82rem] font-semibold text-ink-soft" title={a?.folder ?? ""} data-no-i18n>{a?.folder ?? "…"}</div>
+      </div>
+      <Button tone="teal" icon="folder" onClick={() => void host<AppSettings>("app.folder").then(done)}>{t("Changer")}</Button>
+      {a && !a.folderDefault && <Button tone="teal" variant="ghost" onClick={() => void host<AppSettings>("app.set", { folder: null }).then(done)}>{t("Par défaut")}</Button>}
+    </div>
+  );
+}
+
+function AppSection() {
+  const [a, setA] = useState<AppSettings | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { host<AppSettings>("app.get").then(setA).catch((e: Error) => setError(e.message)); }, []);
+  const set = (patch: Partial<AppSettings>) => {
+    if (a) setA({ ...a, ...patch });
+    host<AppSettings>("app.set", patch).then(setA).catch((e: Error) => setError(e.message));
+  };
+  return (
+    <Section tone="purple" icon="gear" title={t("Application")}>
+      <div className="flex items-center gap-3 rounded-lg bg-cream-deep/60 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="text-[0.95rem] font-extrabold text-ink">{t("Démarrer avec Windows")}</div>
+          <div className="text-[0.82rem] font-semibold text-ink-soft">{t("iClips attend discrètement dans la zone de notification : vos parties sont prêtes à être clippées.")}</div>
+        </div>
+        {a && <Switch label={t("Démarrer avec Windows")} on={a.autostart} onChange={(v) => set({ autostart: v })} />}
+      </div>
+      <Label text={t("Langue")} hint="" />
+      <div className="flex flex-wrap gap-2">
+        <Chip on={!!a && a.lang === null} onClick={() => set({ lang: null })}>{t("Comme Windows")}</Chip>
+        <Chip on={a?.lang === "fr"} onClick={() => set({ lang: "fr" })}><span data-no-i18n>Français</span></Chip>
+        <Chip on={a?.lang === "en"} onClick={() => set({ lang: "en" })}><span data-no-i18n>English</span></Chip>
+      </div>
+      <Label text={t("Thème")} hint="" />
+      <div className="flex flex-wrap gap-2">
+        <Chip on={!!a && a.theme !== "light"} onClick={() => set({ theme: "dark" })}>{t("Sombre")}</Chip>
+        <Chip on={a?.theme === "light"} onClick={() => set({ theme: "light" })}>{t("Clair")}</Chip>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="flex-1 text-[0.85rem] font-semibold text-ink-faint">{a ? t("iClips {0}. Fermer le Studio laisse iClips dans la zone de notification.", a.version) : ""}</span>
+        <Button tone="red" variant="ghost" icon="x" onClick={() => void host("app.quit")}>{t("Quitter iClips")}</Button>
+      </div>
+      {error && <p role="alert" className="text-[0.82rem] font-bold text-peach-deep">{error}</p>}
+    </Section>
   );
 }

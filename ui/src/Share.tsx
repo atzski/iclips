@@ -9,7 +9,7 @@
 import { motion } from "motion/react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { SPRING } from "./ibox/motion";
-import { clipUrl, host, onHost, thumbUrl, type Clip, type Friend } from "./host";
+import { clipUrl, host, onHost, standalone, thumbUrl, type Clip, type Friend } from "./host";
 import { t } from "./i18n";
 import { Button, Icon, Pill, type IconName, type Tone } from "./ui";
 
@@ -113,7 +113,7 @@ export function ShareSheet({ clip: c, onClose, onVertical }: { clip: Clip; onClo
           <Tile tone="blue" icon="copy" label={t("Copier le clip")} hint={t("Ctrl+V dans Discord")} onClick={() => act("share.copy", {}, t("Clip copié : collez-le (Ctrl+V) dans Discord ou un dossier."))} />
           <Tile tone="green" icon="link" label={link ? t("Copier le lien") : t("Créer un lien")} hint={link ? t("Valable encore {0} h", hours) : t("Valable 72 h")} busy={upload ? upload.ratio : undefined}
             onClick={() => (link ? act("share.copyLink", {}, t("Lien copié.")) : makeLink())} />
-          <Tile tone="green" icon="user" label={t("Envoyer à un ami")} hint={t("En message iBox")} pressed={!!friends} onClick={openFriends} />
+          {!standalone && <Tile tone="green" icon="user" label={t("Envoyer à un ami")} hint={t("En message iBox")} pressed={!!friends} onClick={openFriends} />}
           {onVertical && <Tile tone="pink" icon="phone" label={t("Format vertical")} hint={t("TikTok, Shorts, Reels")} onClick={onVertical} />}
           <Tile tone="blue" icon="download" label={t("Enregistrer sous…")} hint={t("Une copie où vous voulez")} onClick={() => host<{ path: string } | null>("share.save", { name: c.name }).then((r) => r && setNote({ text: t("Copie enregistrée.") })).catch((e: Error) => setNote({ text: e.message, bad: true }))} />
           <Tile tone="teal" icon="folder" label={t("Ouvrir le dossier")} hint={t("Dans l’Explorateur")} onClick={() => act("share.reveal", {}, t("Dossier ouvert."))} />
