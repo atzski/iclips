@@ -1,6 +1,6 @@
 [package]
 name = "iclips"
-version = "0.8.0"
+version = "0.8.1"
 description = "iClips : le studio de vos clips de jeu, sans iBox"
 authors = ["atzski"]
 license = "MIT"

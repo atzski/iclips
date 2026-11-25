@@ -3,9 +3,9 @@
 //! langue). La grammaire est une courte liste de phrases : rien n'est envoyé en ligne, rien
 //! n'est enregistré. Le micro n'est ouvert que pendant l'écoute (`clips_auto.rs`).
 //!
-//! Micro choisi dans iClips : le moteur classique (SAPI, `voice_sapi.rs`) l'écoute directement,
-//! sans toucher aux réglages de Windows ; sinon, ce moteur-ci, sur le micro par défaut. Si le
-//! moteur classique échoue, l'écoute retombe sur le micro par défaut.
+//! Le moteur classique (SAPI, `voice_sapi.rs`) écoute le micro choisi dans iClips, ou à défaut
+//! celui par défaut de Windows, sans toucher aux réglages ; s'il échoue, ce moteur-ci prend le
+//! micro par défaut.
 
 /// Phrases reconnues pour une langue (avec une variante de prononciation).
 pub fn phrases(tag: &str) -> &'static [&'static str] {
@@ -38,7 +38,15 @@ impl Listener {
     /// `mic` : nom Windows du micro choisi dans iClips ; `None` : celui par défaut.
     pub fn start(tag: &str, mic: Option<&str>, on_heard: impl Fn() + Send + Sync + 'static) -> Result<Self, String> {
         let on_heard = std::sync::Arc::new(on_heard);
-        if let Some(name) = mic {
+        // sans micro choisi, le micro par défaut passe aussi par le moteur classique : son seuil
+        // (`voice_sapi::accepted`) est vérifié sur de vrais sons, celui du moteur récent ne peut
+        // pas l'être (il n'écoute que le micro). Le moteur récent reste le repli.
+        let default_mic = if mic.is_none() {
+            crate::remote_play::audio::endpoints(true).into_iter().find(|e| e.default).map(|e| e.name)
+        } else {
+            None
+        };
+        if let Some(name) = mic.or(default_mic.as_deref()) {
             let h = on_heard.clone();
             match crate::voice_sapi::Listener::start(tag, phrases(tag), crate::voice_sapi::Input::Device(name.to_string()), move || h()) {
                 Ok(l) => return Ok(Listener::Chosen(l)),
@@ -162,7 +170,9 @@ mod imp {
                     move |_: Ref<SpeechContinuousRecognitionSession>, args: Ref<SpeechContinuousRecognitionResultGeneratedEventArgs>| {
                         if let Some(a) = args.as_ref() {
                             let r = a.Result()?;
-                            let sure = matches!(r.Confidence()?, SpeechRecognitionConfidence::High | SpeechRecognitionConfidence::Medium);
+                            // « haute » seulement : en « moyenne », la musique et les dialogues d'un
+                            // jeu passaient pour « Clip ça ! » (boucle de clips de la 1.0.10)
+                            let sure = matches!(r.Confidence()?, SpeechRecognitionConfidence::High);
                             if r.Status()? == SpeechRecognitionResultStatus::Success && sure {
                                 on_heard();
                             }

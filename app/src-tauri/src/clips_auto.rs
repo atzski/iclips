@@ -69,6 +69,10 @@ const PAUSE_GRACE_MS: u64 = 1_500;
 /// Après chaque clip gardé, la voix reste sourde 3 s (+ la grâce) : le son de déclencheur de la
 /// notification, entendu par le micro, était pris pour « Clip ça ! » et relançait un clip en boucle.
 const AFTER_CLIP_MS: u64 = 3_000;
+/// Garde-fou : 3 clips à la voix en moins de 90 s mettent « Clip ça ! » en pause jusqu'à ce
+/// qu'on le réactive (un son du PC pris pour la phrase ne peut plus garder des clips sans fin).
+const RUNAWAY_COUNT: usize = 3;
+const RUNAWAY_WINDOW_MS: u64 = 90_000;
 
 static SETTINGS: Mutex<Option<Auto>> = Mutex::new(None);
 /// Mémoire des clips tenue en ce moment : partie en cours, ou partout si demandé (`capture.rs`).
@@ -82,6 +86,9 @@ static LAST: AtomicU64 = AtomicU64::new(0);
 /// Voix sourde jusqu'à cette heure (ms) : un clip est rejoué dans iClips (`auto.pause`).
 static QUIET_UNTIL: AtomicU64 = AtomicU64::new(0);
 static VOICE_THREAD: AtomicBool = AtomicBool::new(false);
+/// Heures des derniers clips à la voix, et pause du garde-fou (levée par `auto.set`).
+static VOICE_CLIPS: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+static RUNAWAY: AtomicBool = AtomicBool::new(false);
 /// Dernière erreur de l'écoute et langue utilisée, pour iClips.
 static VOICE: Mutex<(Option<String>, Option<String>)> = Mutex::new((None, None));
 /// Micro écouté par « Clip ça ! » : celui choisi dans iClips, `None` : celui par défaut de Windows.
@@ -111,6 +118,9 @@ pub fn set(app: &AppHandle, patch: &Value) -> Result<Value, String> {
     if let Some(d) = f.parent() { let _ = std::fs::create_dir_all(d); }
     std::fs::write(&f, serde_json::to_vec(&s).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     if let Ok(mut g) = SETTINGS.lock() { *g = Some(s); }
+    // toucher aux réglages lève la pause du garde-fou
+    RUNAWAY.store(false, Ordering::Relaxed);
+    if let Ok(mut v) = VOICE_CLIPS.lock() { v.clear(); }
     if !s.voice {
         // nouvel essai tout de suite à la prochaine activation
         RETRY_AT.store(0, Ordering::Relaxed);
@@ -250,7 +260,15 @@ pub fn on_game_end(app: &AppHandle) {
 }
 
 fn want_voice(app: &AppHandle) -> bool {
-    TEST_UNTIL.load(Ordering::Relaxed) > now() || (PLAYING.load(Ordering::Relaxed) && armed(app).voice)
+    TEST_UNTIL.load(Ordering::Relaxed) > now()
+        || (PLAYING.load(Ordering::Relaxed) && armed(app).voice && !RUNAWAY.load(Ordering::Relaxed))
+}
+
+/// Note un clip à la voix à `at` ; vrai s'il fait le compte du garde-fou dans la fenêtre.
+fn runaway(times: &mut Vec<u64>, at: u64) -> bool {
+    times.retain(|t| at.saturating_sub(*t) < RUNAWAY_WINDOW_MS);
+    times.push(at);
+    times.len() >= RUNAWAY_COUNT
 }
 
 fn set_listening(app: &AppHandle, on: bool) {
@@ -270,9 +288,23 @@ pub(crate) fn heard(app: &AppHandle) {
         eprintln!("iClips : « Clip ça ! » écarté (clip en lecture ou notification de clip)");
         return;
     }
-    if armed(app).voice {
-        trigger(app, "voice");
+    if RUNAWAY.load(Ordering::Relaxed) || !armed(app).voice {
+        return;
     }
+    if !PLAYING.load(Ordering::Relaxed) || !take_turn(&LAST, now()) {
+        return;
+    }
+    let stop = VOICE_CLIPS.lock().map(|mut v| runaway(&mut v, now())).unwrap_or(false);
+    let app = app.clone();
+    std::thread::spawn(move || {
+        save(&app, "voice");
+        if stop {
+            RUNAWAY.store(true, Ordering::Relaxed);
+            toast(&app, "« Clip ça ! » en pause",
+                "Trois clips à la voix en moins de 90 s : un son du PC ressemble peut-être à la phrase. Désactivez puis réactivez « Clip ça ! » dans iClips.",
+                "sound", "warn");
+        }
+    });
 }
 
 /// Fil de l'écoute : ouvre le micro quand il le faut, le ferme dès que ce n'est plus le cas.
@@ -373,6 +405,19 @@ mod tests {
         assert!(c >= 20_000 + 4_000 && c <= 20_000 + COOLDOWN_MS);
         // une lecture plus longue en cours n'est pas raccourcie par un clip gardé
         assert_eq!(quiet_until(30_000, 20_000, AFTER_CLIP_MS), 30_000);
+    }
+
+    #[test]
+    fn trois_clips_a_la_voix_en_90_s_arretent_la_voix() {
+        let mut t = vec![];
+        assert!(!runaway(&mut t, 10_000));
+        assert!(!runaway(&mut t, 20_000));
+        assert!(runaway(&mut t, 30_000));
+        // espacés de plus de 90 s : jamais de pause
+        let mut s = vec![];
+        for i in 0..10 {
+            assert!(!runaway(&mut s, i * 50_000));
+        }
     }
 
     #[test]

@@ -1,7 +1,7 @@
 {
   "name": "iclips-app",
   "private": true,
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "iClips, application Windows autonome (sans iBox).",
   "scripts": {
     "tauri": "tauri"

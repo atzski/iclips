@@ -25,9 +25,12 @@ pub fn same_device(sapi: &str, endpoint: &str) -> bool {
     !a.is_empty() && (a == b || b.starts_with(&a) || a.starts_with(&b))
 }
 
-/// Reconnaissance acceptée : confiance « normale » ou « haute » du moteur.
-pub fn accepted(confidence: i8) -> bool {
-    confidence >= 0
+/// Reconnaissance acceptée : confiance « haute » du moteur et score d'au moins 0,8. Avec une
+/// grammaire de deux phrases, le moteur range presque tout ce qu'il entend (musique, sonneries,
+/// dialogues d'un jeu) sous « Clip ça ! » en confiance « normale » (score 0,5 à 0,77 mesuré) :
+/// c'était la boucle de clips de la 1.0.10. La vraie phrase sort en « haute » (0,90).
+pub fn accepted(confidence: i8, engine: f32) -> bool {
+    confidence >= 1 && engine >= 0.8
 }
 
 pub struct Listener {
@@ -202,8 +205,12 @@ mod imp {
                     let result = ISpRecoResult::from_raw(ev.lParam.0 as *mut _);
                     if let Ok(phrase) = result.GetPhrase() {
                         let confidence = (*phrase).Base.Rule.Confidence;
+                        let engine = (*phrase).Base.Rule.SREngineConfidence;
                         CoTaskMemFree(Some(phrase as *const _));
-                        if super::accepted(confidence) {
+                        if std::env::var_os("IBOX_VOICE_DEBUG").is_some() {
+                            println!("  reconnu : confiance {confidence}, moteur {engine:.3}");
+                        }
+                        if super::accepted(confidence, engine) {
                             on_heard();
                         }
                     }
@@ -248,7 +255,35 @@ mod tests {
         assert!(!same_device("", "Microphone (Yeti Classic)"));
         assert_eq!(sapi_language("fr-FR")[0], "40C");
         assert_eq!(sapi_language("en-US")[0], "409");
-        assert!(accepted(0) && accepted(1) && !accepted(-1));
+        assert!(accepted(1, 0.90) && !accepted(0, 0.77) && !accepted(1, 0.6) && !accepted(-1, 0.9));
+    }
+
+    /// Moteur réel sur un dossier de fichiers (`IBOX_VOICE_NOISE`) : combien de « Clip ça ! »
+    /// chacun déclenche (ceux dont le nom commence par `oui` doivent déclencher, les autres non).
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn sapi_bruit() {
+        let dir = std::path::PathBuf::from(std::env::var("IBOX_VOICE_NOISE").expect("IBOX_VOICE_NOISE"));
+        let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "wav")).collect();
+        files.sort();
+        let mut wrong = vec![];
+        for f in files {
+            let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let c = count.clone();
+            println!("{}", f.file_name().unwrap().to_string_lossy());
+            let l = Listener::start("fr-FR", crate::voice::phrases("fr-FR"), Input::File(f.clone()), move || { c.fetch_add(1, Ordering::Relaxed); }).expect("moteur");
+            let t0 = std::time::Instant::now();
+            while l.alive() && t0.elapsed() < std::time::Duration::from_secs(30) {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            drop(l);
+            let n = count.load(Ordering::Relaxed);
+            let yes = f.file_name().unwrap().to_string_lossy().starts_with("oui");
+            println!("  => {n} déclenchement(s)");
+            if (n > 0) != yes { wrong.push(f.file_name().unwrap().to_string_lossy().into_owned()); }
+        }
+        assert!(wrong.is_empty(), "mal classés : {wrong:?}");
     }
 
     /// Moteur réel sur deux fichiers lus par la voix Hortense (`IBOX_VOICE_WAVS` : dossier avec
