@@ -164,7 +164,7 @@ export function Studio() {
       </header>
 
       {games.length > 1 && (
-        <nav aria-label={t("Tous les jeux")} className="flex gap-2 overflow-x-auto px-8 pb-4">
+        <nav aria-label={t("Tous les jeux")} className="-mt-2 flex gap-2 overflow-x-auto px-8 pt-2 pb-3">
           {[null, ...games].map((g) => (
             <button
               key={g ?? "*"}
