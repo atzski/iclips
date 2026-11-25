@@ -18,6 +18,9 @@
   --accent-text: light-dark(#6b3fc9, #cdb6fb);
   --accent-glow: rgba(155, 108, 242, 0.5);
   --ibox-tint: var(--ibox-lavender);
+  /* teintes d'action franches : le violet d'iClips ne les tire pas (orange resterait rose) */
+  --theme-blend: 6%;
+  --theme-blend-soft: 3%;
 }
 
 @theme inline {
@@ -82,4 +85,146 @@ html.panel body {
 [data-nav]:focus {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
+}
+
+/*
+ * Code couleur (repris d'iBox, Décisions) : chaque action garde sa teinte partout.
+ * violet = garder, créer un clip (iClips) · bleu = ouvrir, lire, copier · vert = partager, envoyer
+ * jaune = favoris · orange = réglages, retouches (couper, son) · rose = images, GIF, vertical
+ * rouge = supprimer · turquoise = automatique, système
+ */
+.tone-accent { --tone: var(--accent); --tone-ink: var(--accent-text); --tone-on: #ffffff; }
+.tone-blue { --tone: var(--tone-blue); --tone-ink: var(--tone-blue-ink); --tone-on: #ffffff; }
+.tone-green { --tone: var(--tone-green); --tone-ink: var(--tone-green-ink); --tone-on: #ffffff; }
+.tone-yellow { --tone: var(--tone-yellow); --tone-ink: var(--tone-yellow-ink); --tone-on: #2a1f00; }
+.tone-orange { --tone: var(--tone-orange); --tone-ink: var(--tone-orange-ink); --tone-on: #ffffff; }
+.tone-red { --tone: var(--tone-red); --tone-ink: var(--tone-red-ink); --tone-on: #ffffff; }
+.tone-pink { --tone: var(--tone-pink); --tone-ink: var(--tone-pink-ink); --tone-on: #ffffff; }
+.tone-purple { --tone: var(--tone-purple); --tone-ink: var(--tone-purple-ink); --tone-on: #ffffff; }
+.tone-teal { --tone: var(--tone-teal); --tone-ink: var(--tone-teal-ink); --tone-on: #ffffff; }
+
+@layer components {
+  .ibox-btn {
+    --tone: var(--accent);
+    --tone-ink: var(--accent-text);
+    --tone-on: #ffffff;
+    /* petit rebond au survol et à l'appui (ressort doux) */
+    transition:
+      transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      background-color 180ms ease,
+      box-shadow 180ms ease,
+      filter 180ms ease;
+  }
+  .ibox-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+  .ibox-btn:active:not(:disabled) {
+    transform: translateY(0) scale(0.96);
+    transition-duration: 90ms;
+  }
+  /* bouton plein : dégradé lumineux et petit rebord en relief, façon console */
+  .ibox-btn-primary {
+    background: linear-gradient(180deg, color-mix(in srgb, var(--tone) 78%, #ffffff), var(--tone) 72%);
+    color: var(--tone-on);
+    box-shadow:
+      inset 0 -3px 0 color-mix(in srgb, var(--tone) 70%, #000000),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35),
+      0 10px 24px -10px var(--tone);
+  }
+  .ibox-btn-primary:hover:not(:disabled) {
+    filter: brightness(1.08) saturate(1.05);
+  }
+  /* bouton teinté : surface colorée, liseré et icône à la couleur de l'action */
+  .ibox-btn-soft {
+    background: color-mix(in srgb, var(--tone) 13%, var(--ibox-white));
+    color: var(--ibox-ink);
+    box-shadow:
+      inset 0 0 0 1.5px color-mix(in srgb, var(--tone) 30%, transparent),
+      inset 0 -3px 0 color-mix(in srgb, var(--tone) 22%, transparent),
+      var(--shadow-xs);
+  }
+  .ibox-btn-soft > svg,
+  .ibox-btn-ghost > svg {
+    color: var(--tone-ink);
+  }
+  .ibox-btn-soft:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--tone) 24%, var(--ibox-white));
+  }
+  .ibox-btn-soft[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--tone) 30%, var(--ibox-white));
+    box-shadow:
+      inset 0 0 0 2px color-mix(in srgb, var(--tone) 60%, transparent),
+      inset 0 -3px 0 color-mix(in srgb, var(--tone) 38%, transparent),
+      var(--shadow-xs);
+  }
+  .ibox-btn-ghost {
+    background: transparent;
+    color: var(--ibox-ink);
+  }
+  .ibox-btn-ghost:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--tone) 14%, transparent);
+  }
+  /* pastille d'icône teintée (tuiles, sections, réglages) */
+  .ibox-pill {
+    background: linear-gradient(150deg, color-mix(in srgb, var(--tone) 22%, var(--ibox-white)), color-mix(in srgb, var(--tone) 38%, var(--ibox-white)));
+    color: var(--tone-ink);
+    box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--tone) 25%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  }
+  /* tuile teintée (partage, qualité) */
+  .ibox-tile {
+    background: color-mix(in srgb, var(--tone) 9%, var(--ibox-white));
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tone) 18%, transparent), var(--shadow-xs);
+    transition:
+      transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      background-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+  .ibox-tile:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--tone) 17%, var(--ibox-white));
+    transform: translateY(-2px);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tone) 36%, transparent), 0 12px 24px -14px var(--tone);
+  }
+  .ibox-tile:active:not(:disabled) {
+    transform: scale(0.97);
+    transition-duration: 90ms;
+  }
+  .ibox-tile[aria-pressed="true"] {
+    background: linear-gradient(160deg, color-mix(in srgb, var(--tone) 80%, #ffffff), var(--tone));
+    color: var(--tone-on);
+    box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--tone) 70%, #000000), 0 12px 26px -12px var(--tone);
+  }
+}
+
+/* barre de progression : dégradé d'iClips et reflet qui passe */
+.ibox-progress {
+  background: linear-gradient(90deg, var(--accent), var(--tone-pink), var(--tone-blue));
+  background-size: 200% 100%;
+  position: relative;
+  overflow: hidden;
+}
+.ibox-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.45) 50%, transparent 80%);
+  transform: translateX(-100%);
+  animation: ibox-sheen 1.4s ease-in-out infinite;
+}
+@keyframes ibox-sheen {
+  to { transform: translateX(100%); }
+}
+
+/* liseré d'en-tête aux couleurs du code */
+.ibox-rainbow {
+  background: linear-gradient(90deg, var(--accent), var(--tone-pink), var(--tone-orange), var(--tone-yellow), var(--tone-green), var(--tone-teal), var(--tone-blue), var(--accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ibox-btn,
+  .ibox-tile {
+    transition-duration: 1ms !important;
+  }
+  .ibox-progress::after {
+    animation: none;
+  }
 }

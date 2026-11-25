@@ -25,6 +25,13 @@ const PATHS = {
       <path d="M6 4.5h10.5l-2 3.5 2 3.5H6" />
     </>
   ),
+  cut: (
+    <>
+      <circle cx="6.5" cy="7" r="2.5" />
+      <circle cx="6.5" cy="17" r="2.5" />
+      <path d="M8.7 8.3 19 16.5M8.7 15.7 19 7.5" />
+    </>
+  ),
   sound: (
     <>
       <path d="M4.5 9.5h3l4.5-4v13l-4.5-4h-3z" />
@@ -112,23 +119,35 @@ export function Icon({ name, size = "1.25em", filled, ...rest }: { name: IconNam
 }
 
 type Variant = "primary" | "soft" | "ghost" | "danger";
+/** Teintes du code couleur (styles.css) ; `accent` : le violet d'iClips. */
+export type Tone = "accent" | "blue" | "green" | "yellow" | "orange" | "red" | "pink" | "purple" | "teal";
 const VARIANTS: Record<Variant, string> = {
-  primary: "bg-accent text-on-accent shadow-sm hover:bg-accent-deep",
-  soft: "bg-white text-ink shadow-sm hover:bg-accent-soft",
-  ghost: "bg-transparent text-ink-soft hover:bg-accent-soft hover:text-ink",
-  danger: "bg-peach-deep text-on-accent shadow-sm hover:brightness-110",
+  primary: "ibox-btn-primary",
+  soft: "ibox-btn-soft",
+  ghost: "ibox-btn-ghost",
+  danger: "ibox-btn-primary",
 };
 
-export function Button({ variant = "soft", icon, filled, className = "", children, ...rest }: { variant?: Variant; icon?: IconName; filled?: boolean } & ComponentProps<"button">) {
+export function Button({ variant = "soft", tone, icon, filled, className = "", children, ...rest }: { variant?: Variant; tone?: Tone; icon?: IconName; filled?: boolean } & ComponentProps<"button">) {
+  const t = tone ?? (variant === "danger" ? "red" : "accent");
   return (
     <button
       type="button"
       data-nav
-      className={`inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full px-5 text-[0.95rem] font-bold whitespace-nowrap transition active:scale-[0.97] disabled:opacity-55 ${VARIANTS[variant]} ${className}`}
+      className={`ibox-btn tone-${t} inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full px-5 text-[0.95rem] font-bold whitespace-nowrap disabled:opacity-55 ${VARIANTS[variant]} ${className}`}
       {...rest}
     >
       {icon && <Icon name={icon} filled={filled} />}
       {children}
     </button>
+  );
+}
+
+/** Pastille d'icône teintée. */
+export function Pill({ icon, tone, size = "h-11 w-11", iconSize = "1.35em" }: { icon: IconName; tone: Tone; size?: string; iconSize?: string }) {
+  return (
+    <span className={`ibox-pill tone-${tone} grid ${size} shrink-0 place-items-center rounded-full`}>
+      <Icon name={icon} size={iconSize} />
+    </span>
   );
 }

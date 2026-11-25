@@ -121,7 +121,7 @@ export function Panel() {
                   {t("Le micro écoute")}
                 </span>
               )}
-              <Button variant="ghost" icon="x" aria-label={t("Fermer")} onClick={close} className="px-3" />
+              <Button tone="red" variant="ghost" icon="x" aria-label={t("Fermer")} onClick={close} className="px-3" />
             </header>
 
             {saved ? (
@@ -143,10 +143,10 @@ export function Panel() {
                   className="h-11 rounded-full bg-cream-deep px-5 text-[0.95rem] font-bold text-ink outline-none placeholder:text-ink-faint"
                 />
                 <div className="flex flex-wrap gap-2">
-                  <Button icon="star" filled={saved.favorite} aria-pressed={saved.favorite} onClick={() => update({ favorite: !saved.favorite })}>
+                  <Button tone="yellow" icon="star" filled={saved.favorite} aria-pressed={saved.favorite} onClick={() => update({ favorite: !saved.favorite })}>
                     {saved.favorite ? t("Retirer des favoris") : t("Ajouter aux favoris")}
                   </Button>
-                  <Button ref={keep} variant="primary" icon="play" onClick={() => void host("screen.open")}>{t("Ouvrir dans le Studio")}</Button>
+                  <Button ref={keep} tone="blue" variant="primary" icon="play" onClick={() => void host("screen.open")}>{t("Ouvrir dans le Studio")}</Button>
                 </div>
               </section>
             ) : (
@@ -165,13 +165,13 @@ export function Panel() {
                 {shotKept ? (
                   <span className="flex flex-1 items-center gap-2 text-[0.9rem] font-bold text-accent-text"><Icon name="check" />{t("Capture gardée")}</span>
                 ) : (
-                  <Button icon="camera" className="flex-1" onClick={() => void saveShot()}>{t("Garder la capture")}</Button>
+                  <Button tone="pink" icon="camera" className="flex-1" onClick={() => void saveShot()}>{t("Garder la capture")}</Button>
                 )}
               </section>
             )}
             <div className="grid grid-cols-2 gap-2">
-              {!saved && <Button variant="soft" icon="play" onClick={() => void host("screen.open")}>{t("Ouvrir le Studio")}</Button>}
-              <Button variant="soft" icon="globe" className={saved ? "col-span-2" : ""} onClick={() => void host("community.open")}>{t("Communauté")}</Button>
+              {!saved && <Button tone="blue" variant="soft" icon="play" onClick={() => void host("screen.open")}>{t("Ouvrir le Studio")}</Button>}
+              <Button tone="green" variant="soft" icon="globe" className={saved ? "col-span-2" : ""} onClick={() => void host("community.open")}>{t("Communauté")}</Button>
             </div>
 
             {error && <p role="alert" className="text-[0.85rem] font-bold text-peach-deep">{error}</p>}

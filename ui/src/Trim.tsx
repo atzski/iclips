@@ -108,13 +108,13 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
           {t("Passage : {0} à {1} ({2})", instant(span.start), instant(span.end), instant(spanLen))}
         </span>
         <span className="flex-1" />
-        <Button variant="ghost" icon="play" onClick={playSpan}>{t("Lire le passage")}</Button>
+        <Button tone="blue" variant="ghost" icon="play" onClick={playSpan}>{t("Lire le passage")}</Button>
         {vertical ? (
-          <Button variant="primary" icon="phone" disabled={busy} onClick={() => onRender("vertical", span)}>{t("Créer en vertical")}</Button>
+          <Button tone="pink" variant="primary" icon="phone" disabled={busy} onClick={() => onRender("vertical", span)}>{t("Créer en vertical")}</Button>
         ) : (
           <>
-            <Button variant="primary" disabled={busy} onClick={() => onRender("mp4", span)}>{t("Créer le clip")}</Button>
-            <Button disabled={busy || gifTooLong} onClick={() => onRender("gif", span)}>{t("Créer un GIF")}</Button>
+            <Button variant="primary" icon="cut" disabled={busy} onClick={() => onRender("mp4", span)}>{t("Créer le clip")}</Button>
+            <Button tone="pink" icon="camera" disabled={busy || gifTooLong} onClick={() => onRender("gif", span)}>{t("Créer un GIF")}</Button>
           </>
         )}
       </div>

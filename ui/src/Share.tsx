@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { SPRING } from "./ibox/motion";
 import { clipUrl, host, onHost, thumbUrl, type Clip, type Friend } from "./host";
 import { t } from "./i18n";
-import { Button, Icon, type IconName } from "./ui";
+import { Button, Icon, Pill, type IconName, type Tone } from "./ui";
 
 /** Glisser un clip hors du Studio : iBox prend le relais (glisser-déposer de l'Explorateur). */
 export function dragOut(e: DragEvent, c: Clip) {
@@ -92,12 +92,12 @@ export function ShareSheet({ clip: c, onClose, onVertical }: { clip: Clip; onClo
     <motion.div data-nav-scope className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <motion.div role="dialog" aria-modal="true" aria-label={t("Partager le clip")} className="flex max-h-full w-full max-w-[44rem] flex-col gap-4 overflow-y-auto rounded-xl bg-white p-6 shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8 }} transition={SPRING.smooth}>
         <header className="flex items-center gap-3">
-          <Button ref={back} icon="back" variant="ghost" onClick={onClose} aria-label={t("Retour")} className="px-3" />
+          <Button ref={back} tone="blue" icon="back" variant="ghost" onClick={onClose} aria-label={t("Retour")} className="px-3" />
           <h2 className="flex-1 font-display text-[1.35rem] leading-tight text-ink">{t("Partager le clip")}</h2>
         </header>
 
         {/* la vignette se glisse telle quelle hors du Studio */}
-        <div draggable onDragStart={(e) => dragOut(e, c)} className="group flex cursor-grab items-center gap-4 rounded-lg border-2 border-dashed border-accent/50 bg-accent-soft/40 p-3 active:cursor-grabbing" title={t("Glissez le clip")}>
+        <div draggable onDragStart={(e) => dragOut(e, c)} className="group flex cursor-grab transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] hover:scale-[1.01] items-center gap-4 rounded-lg border-2 border-dashed border-[color-mix(in_srgb,var(--accent)_55%,transparent)] bg-[linear-gradient(120deg,var(--accent-soft),color-mix(in_srgb,var(--tone-pink)_14%,var(--ibox-white)))] p-3 active:cursor-grabbing" title={t("Glissez le clip")}>
           <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-md bg-black">
             {c.kind === "gif" || c.kind === "image" ? (src && <img src={src} alt="" draggable={false} className="h-full w-full object-cover" />)
               : thumb ? <img src={thumb} alt="" draggable={false} className="h-full w-full object-cover" />
@@ -110,19 +110,19 @@ export function ShareSheet({ clip: c, onClose, onVertical }: { clip: Clip; onClo
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <Tile icon="copy" label={t("Copier le clip")} hint={t("Ctrl+V dans Discord")} onClick={() => act("share.copy", {}, t("Clip copié : collez-le (Ctrl+V) dans Discord ou un dossier."))} />
-          <Tile icon="link" label={link ? t("Copier le lien") : t("Créer un lien")} hint={link ? t("Valable encore {0} h", hours) : t("Valable 72 h")} busy={upload ? upload.ratio : undefined}
+          <Tile tone="blue" icon="copy" label={t("Copier le clip")} hint={t("Ctrl+V dans Discord")} onClick={() => act("share.copy", {}, t("Clip copié : collez-le (Ctrl+V) dans Discord ou un dossier."))} />
+          <Tile tone="green" icon="link" label={link ? t("Copier le lien") : t("Créer un lien")} hint={link ? t("Valable encore {0} h", hours) : t("Valable 72 h")} busy={upload ? upload.ratio : undefined}
             onClick={() => (link ? act("share.copyLink", {}, t("Lien copié.")) : makeLink())} />
-          <Tile icon="user" label={t("Envoyer à un ami")} hint={t("En message iBox")} pressed={!!friends} onClick={openFriends} />
-          {onVertical && <Tile icon="phone" label={t("Format vertical")} hint={t("TikTok, Shorts, Reels")} onClick={onVertical} />}
-          <Tile icon="download" label={t("Enregistrer sous…")} hint={t("Une copie où vous voulez")} onClick={() => host<{ path: string } | null>("share.save", { name: c.name }).then((r) => r && setNote({ text: t("Copie enregistrée.") })).catch((e: Error) => setNote({ text: e.message, bad: true }))} />
-          <Tile icon="folder" label={t("Ouvrir le dossier")} hint={t("Dans l’Explorateur")} onClick={() => act("share.reveal", {}, t("Dossier ouvert."))} />
+          <Tile tone="green" icon="user" label={t("Envoyer à un ami")} hint={t("En message iBox")} pressed={!!friends} onClick={openFriends} />
+          {onVertical && <Tile tone="pink" icon="phone" label={t("Format vertical")} hint={t("TikTok, Shorts, Reels")} onClick={onVertical} />}
+          <Tile tone="blue" icon="download" label={t("Enregistrer sous…")} hint={t("Une copie où vous voulez")} onClick={() => host<{ path: string } | null>("share.save", { name: c.name }).then((r) => r && setNote({ text: t("Copie enregistrée.") })).catch((e: Error) => setNote({ text: e.message, bad: true }))} />
+          <Tile tone="teal" icon="folder" label={t("Ouvrir le dossier")} hint={t("Dans l’Explorateur")} onClick={() => act("share.reveal", {}, t("Dossier ouvert."))} />
         </div>
 
         {link && (
           <div className="flex items-center gap-2 rounded-full bg-cream-deep py-1 pr-1 pl-5">
             <span className="min-w-0 flex-1 truncate text-[0.9rem] font-bold text-ink select-all">{link.url}</span>
-            <Button variant="primary" icon="copy" onClick={() => act("share.copyLink", {}, t("Lien copié."))}>{t("Copier")}</Button>
+            <Button tone="green" variant="primary" icon="copy" onClick={() => act("share.copyLink", {}, t("Lien copié."))}>{t("Copier")}</Button>
           </div>
         )}
 
@@ -141,7 +141,7 @@ export function ShareSheet({ clip: c, onClose, onVertical }: { clip: Clip; onClo
                 </div>
                 {sent.includes(f.id)
                   ? <span className="inline-flex items-center gap-1 px-3 text-[0.88rem] font-bold text-accent-text"><Icon name="check" />{t("Envoyé")}</span>
-                  : <Button disabled={!!upload} onClick={() => toFriend(f.id)}>{t("Envoyer")}</Button>}
+                  : <Button tone="green" icon="share" disabled={!!upload} onClick={() => toFriend(f.id)}>{t("Envoyer")}</Button>}
               </div>
             ))}
           </section>
@@ -158,19 +158,19 @@ export function ShareSheet({ clip: c, onClose, onVertical }: { clip: Clip; onClo
   );
 }
 
-function Tile({ icon, label, hint, onClick, busy, pressed }: { icon: IconName; label: string; hint: string; onClick: () => void; busy?: number; pressed?: boolean }) {
+function Tile({ tone, icon, label, hint, onClick, busy, pressed }: { tone: Tone; icon: IconName; label: string; hint: string; onClick: () => void; busy?: number; pressed?: boolean }) {
   return (
     <button
       type="button"
       data-nav
       aria-pressed={pressed}
       onClick={onClick}
-      className={`relative flex flex-col items-start gap-2 overflow-hidden rounded-lg p-4 text-left transition active:scale-[0.98] ${pressed ? "bg-accent text-on-accent" : "bg-cream-deep/70 text-ink hover:bg-accent-soft"}`}
+      className={`tone-${tone} ibox-tile relative flex flex-col items-start gap-2 overflow-hidden rounded-lg p-4 text-left ${pressed ? "" : "text-ink"}`}
     >
-      {busy !== undefined && <motion.span className="absolute inset-y-0 left-0 bg-accent/25" animate={{ width: `${busy * 100}%` }} transition={SPRING.smooth} aria-hidden="true" />}
-      <Icon name={icon} size="1.6em" />
+      {busy !== undefined && <motion.span className="ibox-progress absolute inset-x-0 bottom-0 h-1.5" initial={{ width: 0 }} animate={{ width: `${busy * 100}%` }} transition={SPRING.smooth} aria-hidden="true" />}
+      {pressed ? <Icon name={icon} size="1.6em" /> : <Pill icon={icon} tone={tone} size="h-10 w-10" iconSize="1.25em" />}
       <span className="relative text-[0.95rem] font-extrabold">{label}</span>
-      <span className={`relative text-[0.78rem] font-semibold ${pressed ? "text-on-accent/80" : "text-ink-soft"}`}>{hint}</span>
+      <span className={`relative text-[0.78rem] font-semibold ${pressed ? "opacity-85" : "text-ink-soft"}`}>{hint}</span>
     </button>
   );
 }

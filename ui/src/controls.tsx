@@ -6,7 +6,7 @@ import { SPRING } from "./ibox/motion";
 export function Switch({ label, on, onChange, disabled }: { label: string; on: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button type="button" role="switch" data-nav aria-checked={on} aria-label={label} disabled={disabled} onClick={() => onChange(!on)}
-      className={`relative h-8 w-14 shrink-0 rounded-full transition disabled:opacity-55 ${on ? "bg-accent" : "bg-line"}`}>
+      className={`relative h-8 w-14 shrink-0 rounded-full transition-colors duration-200 disabled:opacity-55 ${on ? "bg-[var(--tone,var(--accent))] shadow-[0_4px_14px_-6px_var(--tone,var(--accent))]" : "bg-line"}`}>
       <motion.span className="absolute top-1 left-1 h-6 w-6 rounded-full bg-white shadow" animate={{ x: on ? 24 : 0 }} transition={SPRING.snappy} />
     </button>
   );
@@ -41,7 +41,7 @@ export function Slider({ label, value, onChange }: { label: string; value: numbe
         aria-label={label}
         aria-valuetext={`${pct} %`}
         onChange={(e) => onChange(Number(e.target.value) / 100)}
-        className="h-2 min-w-0 flex-1 cursor-pointer accent-[var(--color-accent)]"
+        className="h-2 min-w-0 flex-1 cursor-pointer accent-[var(--tone,var(--accent))]"
       />
       <span className="w-14 text-right text-[0.88rem] font-extrabold text-ink tabular-nums">{pct} %</span>
     </div>

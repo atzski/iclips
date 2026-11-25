@@ -39,8 +39,8 @@ export function SoundMix({ clip: c, video, busy, onMix }: { clip: Clip; video: R
             ? t("Le lecteur joue le mélange d’origine : le nouveau s’entend dans le clip créé.")
             : t("Ce clip n’a qu’une piste de son. Activez « Pistes séparées » dans Réglages : le jeu et le micro se régleront à part sur vos prochains clips.")}
         </p>
-        <Button variant="ghost" disabled={!changed} onClick={() => { setGame(1); setMic(1); }}>{t("Rétablir")}</Button>
-        <Button variant="primary" icon="sound" disabled={busy || !changed} onClick={() => onMix(game, mic)}>{t("Créer avec ce son")}</Button>
+        <Button tone="blue" variant="ghost" disabled={!changed} onClick={() => { setGame(1); setMic(1); }}>{t("Rétablir")}</Button>
+        <Button tone="orange" variant="primary" icon="sound" disabled={busy || !changed} onClick={() => onMix(game, mic)}>{t("Créer avec ce son")}</Button>
       </div>
     </div>
   );

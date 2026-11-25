@@ -9,7 +9,7 @@ import { SPRING } from "./ibox/motion";
 import { host, type CaptureSettings, type Quality } from "./host";
 import { size } from "./format";
 import { t } from "./i18n";
-import { Button, Icon, type IconName } from "./ui";
+import { Button, Pill, type IconName, type Tone } from "./ui";
 import { Slider, Switch } from "./controls";
 
 const SECONDS = [15, 30, 60, 120];
@@ -45,7 +45,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
     <motion.div data-nav-scope className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <motion.div role="dialog" aria-modal="true" aria-label={t("Réglages")} className="flex max-h-full w-full max-w-[48rem] flex-col gap-4 overflow-y-auto rounded-xl bg-white p-6 shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8 }} transition={SPRING.smooth}>
         <header className="flex items-center gap-3">
-          <Button ref={back} icon="back" variant="ghost" onClick={onClose} aria-label={t("Retour")} className="px-3" />
+          <Button ref={back} tone="blue" icon="back" variant="ghost" onClick={onClose} aria-label={t("Retour")} className="px-3" />
           <h2 className="flex-1 font-display text-[1.35rem] leading-tight text-ink">{t("Réglages")}</h2>
           {s && (
             <span className="flex items-center gap-3 text-[0.9rem] font-bold text-ink-soft">
@@ -55,7 +55,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           )}
         </header>
 
-        <Section icon="play" title={t("Capture")}>
+        <Section tone="accent" icon="play" title={t("Capture")}>
           <Label text={t("Durée d’un clip")} hint={s ? t("Mémoire tenue en jeu : environ {0}", size(s.memory)) : ""} />
           <div className="flex flex-wrap gap-2">
             {SECONDS.map((n) => (
@@ -66,15 +66,15 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           <div className="grid grid-cols-4 gap-2">
             {QUALITIES.map((q) => (
               <button key={q.value} type="button" data-nav aria-pressed={s?.quality === q.value} onClick={() => set({ quality: q.value })}
-                className={`flex flex-col items-start rounded-lg px-4 py-3 text-left transition active:scale-[0.98] ${s?.quality === q.value ? "bg-accent text-on-accent" : "bg-cream-deep/70 text-ink hover:bg-accent-soft"}`}>
+                className="tone-accent ibox-tile flex flex-col items-start rounded-lg px-4 py-3 text-left text-ink">
                 <span className="text-[0.95rem] font-extrabold">{t(q.label)}</span>
-                <span className={`text-[0.78rem] font-semibold ${s?.quality === q.value ? "text-on-accent/80" : "text-ink-soft"}`}>{q.hint}</span>
+                <span className={`text-[0.78rem] font-semibold ${s?.quality === q.value ? "opacity-85" : "text-ink-soft"}`}>{q.hint}</span>
               </button>
             ))}
           </div>
         </Section>
 
-        <Section icon="sound" title={t("Son")}>
+        <Section tone="orange" icon="sound" title={t("Son")}>
           <Track label={t("Son de Windows")} hint={t("Le jeu, et tout ce que le PC joue")} on={!!s?.systemAudio} volume={s?.systemVolume ?? 1}
             onToggle={(v) => set({ systemAudio: v })} onVolume={(v) => set({ systemVolume: v }, 300)} />
           <Track label={t("Micro")} hint={t("Votre voix, par le micro par défaut de Windows")} on={!!s?.microphone} volume={s?.micVolume ?? 1}
@@ -88,7 +88,7 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           </div>
         </Section>
 
-        <Section icon="pad" title={t("Raccourcis")}>
+        <Section tone="blue" icon="pad" title={t("Raccourcis")}>
           <ul className="grid grid-cols-2 gap-2 text-[0.88rem] font-semibold text-ink-soft">
             <Key keys="Alt+X" what={t("Ouvrir le panneau (raccourci de l’overlay d’iBox)")} />
             <Key keys="Alt+V" what={t("Ouvrir le panneau")} />
@@ -98,10 +98,10 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           </ul>
         </Section>
 
-        <Section icon="folder" title={t("Stockage")}>
+        <Section tone="teal" icon="folder" title={t("Stockage")}>
           <div className="flex items-center gap-3">
             <span className="flex-1 text-[0.92rem] font-bold text-ink">{s ? t("{0} fichiers · {1}", s.count, size(s.bytes)) : "…"}</span>
-            <Button icon="folder" onClick={() => void host("capture.folder").catch((e: Error) => setError(e.message))}>{t("Ouvrir le dossier")}</Button>
+            <Button tone="teal" icon="folder" onClick={() => void host("capture.folder").catch((e: Error) => setError(e.message))}>{t("Ouvrir le dossier")}</Button>
           </div>
         </Section>
         {error && <p role="alert" className="text-[0.85rem] font-bold text-peach-deep">{t("Action impossible : {0}", error)}</p>}
@@ -110,10 +110,10 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Section({ icon, title, children }: { icon: IconName; title: string; children: React.ReactNode }) {
+function Section({ tone, icon, title, children }: { tone: Tone; icon: IconName; title: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-3">
-      <h3 className="flex items-center gap-2 text-[0.8rem] font-extrabold tracking-[0.14em] text-ink-soft uppercase"><Icon name={icon} size="1.15em" />{title}</h3>
+    <section className={`tone-${tone} flex flex-col gap-3 rounded-xl border-l-4 border-[var(--tone)] bg-[color-mix(in_srgb,var(--tone)_5%,transparent)] py-3 pr-1 pl-4`}>
+      <h3 className="flex items-center gap-2.5 text-[0.8rem] font-extrabold tracking-[0.14em] text-[var(--tone-ink)] uppercase"><Pill icon={icon} tone={tone} size="h-8 w-8" iconSize="1.05em" />{title}</h3>
       {children}
     </section>
   );
@@ -131,7 +131,7 @@ function Label({ text, hint }: { text: string; hint: string }) {
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" data-nav aria-pressed={on} onClick={onClick}
-      className={`h-10 rounded-full px-5 text-[0.92rem] font-bold transition ${on ? "bg-accent text-on-accent" : "bg-cream-deep/70 text-ink hover:bg-accent-soft"}`}>
+      className="ibox-btn ibox-btn-soft tone-accent h-10 rounded-full px-5 text-[0.92rem] font-bold">
       {children}
     </button>
   );

@@ -1,6 +1,7 @@
 import "@fontsource-variable/nunito";
 import "./styles.css";
 import { createRoot } from "react-dom/client";
+import { MotionConfig } from "motion/react";
 import { lang, t } from "./i18n";
 import { Panel } from "./Panel";
 import { Studio } from "./Studio";
@@ -15,4 +16,5 @@ const panel = location.pathname.endsWith("/panel.html");
 document.title = panel ? "iClips" : t("iClips Studio");
 if (panel) document.documentElement.classList.add("panel");
 
-createRoot(document.getElementById("root")!).render(panel ? <Panel /> : <Studio />);
+// animations réduites si Windows le demande
+createRoot(document.getElementById("root")!).render(<MotionConfig reducedMotion="user">{panel ? <Panel /> : <Studio />}</MotionConfig>);
