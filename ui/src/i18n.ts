@@ -133,6 +133,11 @@ const EN: Record<string, string> = {
   "Rallumer": "Turn back on",
   "La mémoire des clips est coupée : rallumez-la pour garder vos moments.": "Clip memory is off: turn it back on to keep your moments.",
   "Rallumer la mémoire des clips": "Turn clip memory back on",
+  // partout, pas seulement en jeu
+  "Partout, pas seulement en jeu": "Everywhere, not just in games",
+  "Garder aussi un moment du bureau : une vidéo, un appel, un moment drôle. « Clip ça ! » et Vue + A marchent partout.": "Keep a desktop moment too: a video, a call, a funny moment. “Clip that!” and View + A work everywhere.",
+  "Pas de partie en cours. Pour garder aussi le bureau : Réglages d’iClips › Partout, pas seulement en jeu.": "No game running. To keep the desktop too: iClips Settings › Everywhere, not just in games.",
+  "Bureau": "Desktop",
   // partage
   "Partager": "Share",
   "Partager le clip": "Share the clip",

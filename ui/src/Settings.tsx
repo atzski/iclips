@@ -60,6 +60,13 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
             </div>
             {s && <Switch label={t("Mémoire des clips")} on={s.enabled} onChange={(v) => set({ enabled: v })} />}
           </div>
+          <div className="flex items-center gap-3 rounded-lg bg-cream-deep/60 px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <div className="text-[0.95rem] font-extrabold text-ink">{t("Partout, pas seulement en jeu")}</div>
+              <div className="text-[0.82rem] font-semibold text-ink-soft">{t("Garder aussi un moment du bureau : une vidéo, un appel, un moment drôle. « Clip ça ! » et Vue + A marchent partout.")}</div>
+            </div>
+            {s && <Switch label={t("Partout, pas seulement en jeu")} on={!!s.everywhere} onChange={(v) => set({ everywhere: v })} />}
+          </div>
           <Label text={t("Durée d’un clip")} hint={s ? t("Mémoire tenue en jeu : environ {0}", size(s.memory)) : ""} />
           <div className="flex flex-wrap gap-2">
             {SECONDS.map((n) => (

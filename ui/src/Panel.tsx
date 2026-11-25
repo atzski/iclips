@@ -96,7 +96,7 @@ export function Panel() {
   const seconds = status ? Math.min(status.seconds, status.max) : 0;
   const why = !status ? null
     : !status.enabled ? t("La mémoire des clips est coupée : rallumez-la pour garder vos moments.")
-    : !status.game ? t("Les clips se gardent pendant une partie lancée depuis iBox.")
+    : seconds === 0 && !status.game ? t("Pas de partie en cours. Pour garder aussi le bureau : Réglages d’iClips › Partout, pas seulement en jeu.")
     : seconds === 0 ? t("La mémoire du clip se remplit…")
     : null;
 
@@ -119,7 +119,7 @@ export function Panel() {
               <img src={logo} alt="" className="h-11 w-11" />
               <div className="min-w-0 flex-1">
                 <div className="font-display text-[1.25rem] leading-tight text-ink">iClips</div>
-                <div className="truncate text-[0.85rem] font-semibold text-ink-soft">{status?.game ?? t("Hors partie")}</div>
+                <div className="truncate text-[0.85rem] font-semibold text-ink-soft">{status?.game ?? (seconds > 0 ? t("Bureau") : t("Hors partie"))}</div>
               </div>
               {status?.listening && (
                 <span role="status" className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[0.8rem] font-extrabold text-accent-text">

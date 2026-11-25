@@ -68,6 +68,8 @@ export interface CaptureSettings {
   bytes: number;
   /** Raccourci de l'overlay d'iBox (il ouvre le panneau d'iClips), null s'il est coupé. */
   overlayKeys?: string | null;
+  /** Mémoire tenue aussi hors des parties (bureau). */
+  everywhere?: boolean;
   /** Sortie écoutée et micro choisis (null : ceux par défaut), appareils branchés. */
   outputDevice?: string | null;
   micDevice?: string | null;
