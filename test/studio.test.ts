@@ -46,3 +46,20 @@ describe("vignettes", () => {
     expect(cover(1920, 1080)).toEqual({ sx: 0, sy: 0, sw: 1920, sh: 1080 });
   });
 });
+
+describe("montage", () => {
+  it("borne le passage au clip", async () => {
+    const { clampSpan } = await import("../ui/src/edit");
+    expect(clampSpan({ start: -2, end: 50 }, 12)).toEqual({ start: 0, end: 12 });
+    expect(clampSpan({ start: 11.9, end: 3 }, 12)).toEqual({ start: 11.5, end: 12 });
+    expect(clampSpan({ start: 4, end: 4.1 }, 12)).toEqual({ start: 4, end: 4.5 });
+  });
+
+  it("assemble des clips entiers, durée inconnue comprise", async () => {
+    const { joinSegments } = await import("../ui/src/edit");
+    expect(joinSegments([{ name: "a.mp4", duration: 12.4 }, { name: "b.mp4" }])).toEqual([
+      { name: "a.mp4", start: 0, end: 12.4 },
+      { name: "b.mp4", start: 0, end: 35 },
+    ]);
+  });
+});

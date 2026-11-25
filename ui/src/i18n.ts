@@ -42,6 +42,24 @@ const EN: Record<string, string> = {
   "Alt+V ou Vue + X : ouvrir et fermer": "Alt+V or View + X: open and close",
   // Studio
   "Tous les jeux": "All games",
+  // montage
+  "Assembler": "Join",
+  "Couper": "Trim",
+  "Choisissez les clips dans l’ordre voulu": "Pick the clips in the order you want",
+  "{0} clips choisis": "{0} clips picked",
+  "Montage impossible : {0}": "Edit failed: {0}",
+  "{0} (coupé)": "{0} (trimmed)",
+  "Coupe du clip…": "Trimming the clip…",
+  "Création du GIF…": "Making the GIF…",
+  "Assemblage de {0} clips…": "Joining {0} clips…",
+  "Passage : {0} à {1} ({2})": "Passage: {0} to {1} ({2})",
+  "Début ici": "Start here",
+  "Fin ici": "End here",
+  "Lire le passage": "Play the passage",
+  "Créer le clip": "Make the clip",
+  "Créer un GIF": "Make a GIF",
+  "Un GIF dure 10 secondes au plus : raccourcissez le passage.": "A GIF lasts 10 seconds at most: shorten the passage.",
+  "I et O posent le début et la fin. Le clip commence sur l’image clé qui précède le début (une par seconde).": "I and O set the start and the end. The clip starts on the keyframe before the start (one per second).",
 };
 
 export const lang: "fr" | "en" = typeof location !== "undefined" && new URLSearchParams(location.search).get("lang") === "en" ? "en" : "fr";

@@ -9,6 +9,8 @@ export const PLUGIN_ID = "iclips";
 
 export interface Clip {
   name: string;
+  /** `gif` : fait par le montage, s'affiche comme une image. */
+  kind?: "video" | "gif";
   game: string | null;
   platformId: string | null;
   /** Horodatage (ms). */
@@ -35,7 +37,7 @@ export interface ClipStatus {
 }
 
 /** Hors d'iBox (aperçu `npm run dev`), des clips d'exemple sans vidéo. */
-const inIbox = location.hostname === "iboxplugin.localhost" || location.protocol === "iboxplugin:";
+const inIbox = typeof location !== "undefined" && (location.hostname === "iboxplugin.localhost" || location.protocol === "iboxplugin:");
 
 let sample: Clip[] = [
   { name: "1764060000000-hollow-knight.mp4", game: "Hollow Knight", platformId: "pc", at: Date.now() - 3_600_000, size: 18_400_000, title: "Mante sans un coup", favorite: true, src: "" },
@@ -54,6 +56,18 @@ function preview(call: string, arg: Record<string, unknown>): unknown {
     return null;
   }
   if (call === "screen.close") window.close();
+  if (call === "edit.render") {
+    // aperçu : un rendu imité, en une seconde et demie
+    const job = Math.floor(Math.random() * 1e6);
+    const emit = (event: string, payload: unknown) => window.dispatchEvent(new CustomEvent("ibox:host", { detail: { event, payload } }));
+    [0.25, 0.6, 0.9].forEach((ratio, i) => setTimeout(() => emit("edit://progress", { job, ratio }), 300 * (i + 1)));
+    setTimeout(() => {
+      const c: Clip = { name: `${Date.now()}-montage.mp4`, game: sample[0]?.game ?? null, platformId: "pc", at: Date.now(), size: 9_000_000, title: (arg.title as string) ?? null, favorite: false, src: "" };
+      sample = [c, ...sample];
+      emit("edit://done", { job, name: c.name });
+    }, 1500);
+    return { job };
+  }
   if (call === "clips.status") return { game: "Hollow Knight", platformId: "pc", enabled: true, seconds: 30, max: 30 } satisfies ClipStatus;
   if (call === "clips.save") {
     const c: Clip = { name: `${Date.now()}-hollow-knight.mp4`, game: "Hollow Knight", platformId: "pc", at: Date.now(), size: 21_000_000, title: null, favorite: false, src: "" };
