@@ -99,7 +99,7 @@ let capture: CaptureSettings = { enabled: true, quality: "high", seconds: 30, sy
   outputDevice: null, micDevice: null,
   outputs: [{ id: "o1", name: "Casque (USB)", default: true }, { id: "o2", name: "Haut-parleurs (Realtek)", default: false }],
   inputs: [{ id: "i1", name: "Micro du casque (USB)", default: true }, { id: "i2", name: "Micro de bureau (USB)", default: false }] };
-let auto: AutoStatus = { voice: false, pad: true, end: false, listening: false, language: "fr-FR", error: null };
+let auto: AutoStatus = { voice: true, pad: true, end: false, listening: false, language: "fr-FR", error: null };
 
 function preview(call: string, arg: Record<string, unknown>): unknown {
   if (call === "clips.list") return sample;
