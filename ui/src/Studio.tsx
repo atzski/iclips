@@ -181,7 +181,7 @@ export function Studio() {
         </nav>
       )}
 
-      <main className="min-h-0 flex-1 overflow-y-auto px-8 pb-8">
+      <main className="min-h-0 flex-1 overflow-y-auto px-8 pt-3 pb-8">
         {clips && shown.length === 0 ? (
           <Empty favorites={filter === "favorites" && clips.length > 0} />
         ) : (
@@ -288,20 +288,20 @@ function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: (
           src && <video src={`${src}#t=0.5`} preload="metadata" muted playsInline tabIndex={-1} onLoadedMetadata={(e) => setLength(e.currentTarget.duration)} className="absolute inset-0 h-full w-full object-cover" />
         )}
         <span className="absolute inset-0 grid place-items-center opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
-          <span className="grid h-14 w-14 scale-75 place-items-center rounded-full bg-[var(--tone)] text-white shadow-[0_8px_24px_-6px_var(--tone)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-100 group-focus:scale-100"><Icon name={isImage(c) ? "camera" : "play"} size="1.5em" /></span>
+          <span className="grid h-14 w-14 scale-75 place-items-center rounded-full bg-[var(--tone)] text-[#fff] shadow-[0_8px_24px_-6px_var(--tone)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-100 group-focus:scale-100"><Icon name={isImage(c) ? "camera" : "play"} size="1.5em" /></span>
         </span>
-        {length > 0 && <span className="absolute right-2 bottom-2 rounded-full bg-black/60 px-2 py-0.5 text-[0.75rem] font-extrabold text-white">{duration(length)}</span>}
+        {length > 0 && <span className="absolute right-2 bottom-2 rounded-full bg-black/60 px-2 py-0.5 text-[0.75rem] font-extrabold text-[#fff]">{duration(length)}</span>}
         {c.favorite && <span className="tone-yellow absolute top-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-[var(--tone)] text-[var(--tone-on)] shadow-md" aria-label={t("Favori")}><Icon name="star" filled size="1.05em" /></span>}
         {c.kind !== "video" && c.kind && (
           <span className="absolute top-2 right-2 rounded-full bg-[var(--tone)] px-2.5 py-0.5 text-[0.72rem] font-extrabold tracking-wide text-[var(--tone-on)] uppercase shadow-md">{c.kind === "gif" ? "GIF" : t("Capture")}</span>
         )}
         {c.auto && (
-          <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[0.75rem] font-extrabold text-white" title={autoLabel(c.auto)}>
+          <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[0.75rem] font-extrabold text-[#fff]" title={autoLabel(c.auto)}>
             <Icon name={c.auto === "voice" ? "mic" : c.auto === "pad" ? "pad" : "flag"} size="1.1em" />
             <span className="sr-only">{autoLabel(c.auto)}</span>
           </span>
         )}
-        {order > 0 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING.pop} className="tone-orange absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full bg-[var(--tone)] text-[0.95rem] font-extrabold text-white shadow-md">{order}</motion.span>}
+        {order > 0 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING.pop} className="tone-orange absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full bg-[var(--tone)] text-[0.95rem] font-extrabold text-[#fff] shadow-md">{order}</motion.span>}
       </div>
       <div className="px-4 py-3">
         <div className="truncate text-[0.98rem] font-bold text-ink">{label(c)}</div>
@@ -366,7 +366,7 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
               {mode === "vertical" && <Vertical video={video} focus={focus} onFocus={setFocus} />}
             </>
           ) : (
-            <div className="grid aspect-video place-items-center text-[0.95rem] font-bold text-white/70">{src ? t("Lecture impossible.") : c.game ?? ""}</div>
+            <div className="grid aspect-video place-items-center text-[0.95rem] font-bold text-[#fff]/70">{src ? t("Lecture impossible.") : c.game ?? ""}</div>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-3 px-6 py-4">
