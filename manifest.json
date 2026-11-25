@@ -1,0 +1,11 @@
+{
+  "id": "iclips",
+  "name": "iClips",
+  "version": "0.1.0",
+  "author": { "name": "atzski", "username": "atzski" },
+  "description": "Le studio de vos clips de jeu : galerie, lecteur, titres et favoris.",
+  "ibox": ">=1.0.8",
+  "platforms": ["windows"],
+  "permissions": ["clips"],
+  "screen": { "entry": "ui/studio.html", "title": "iClips Studio" }
+}

@@ -1,0 +1,78 @@
+/* Copies d'iBox (src/styles/tokens.css, police Cal Sans) : à recopier quand iBox les change. */
+@import "./ibox/tokens.css";
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Cal Sans";
+  src: url("./ibox/fonts/CalSans-Regular.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Accent d'iClips : le violet du logo */
+:root {
+  --accent: #9b6cf2;
+  --accent-soft: light-dark(#efe7fd, #2c2346);
+  --accent-deep: #6b3fc9;
+  --accent-text: light-dark(#6b3fc9, #cdb6fb);
+  --accent-glow: rgba(155, 108, 242, 0.5);
+  --ibox-tint: var(--ibox-lavender);
+}
+
+@theme inline {
+  --color-white: var(--ibox-white);
+  --color-on-accent: var(--ibox-on-accent);
+  --color-cream: var(--ibox-cream);
+  --color-cream-deep: var(--ibox-cream-deep);
+  --color-ink: var(--ibox-ink);
+  --color-ink-soft: var(--ibox-ink-soft);
+  --color-ink-faint: var(--ibox-ink-faint);
+  --color-line: var(--ibox-line);
+  --color-peach-deep: var(--ibox-peach-deep);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-deep: var(--accent-deep);
+  --color-accent-text: var(--accent-text);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+
+@theme {
+  --default-transition-duration: 200ms;
+  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html {
+  /* échelle fluide d'iBox : lisible sur moniteur comme sur une TV */
+  font-size: clamp(14px, 0.62vw + 7px, 24px);
+  background: var(--ibox-cream);
+  color: var(--ibox-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  user-select: none;
+}
+
+/* focus visible au clavier comme à la manette */
+[data-nav]:focus-visible,
+[data-nav]:focus {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
