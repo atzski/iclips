@@ -51,6 +51,8 @@ export function groups(overlayKeys: string | null | undefined): Group[] {
     { title: t("Galerie"), icon: "play", tone: "blue", items: [
       ["1 · 2 · 3 · 4", t("Tous, Clips, Captures, Favoris")],
       ["Ctrl+A", t("Assembler")],
+      ["S", t("Sélectionner plusieurs clips (Ctrl+A : tous, Suppr : supprimer)")],
+      [t("Ctrl + clic · Maj + clic"), t("Cocher un clip, une plage de clips")],
       ["A", t("Automatique")],
       ["R", t("Réglages")],
       ["?", t("Cette aide")],

@@ -50,6 +50,14 @@ export function Studio() {
   const [error, setError] = useState<string | null>(null);
   /** Assemblage : clips choisis, dans l'ordre (null : pas en cours). */
   const [picked, setPicked] = useState<string[] | null>(null);
+  /** Sélection (0.7.1) : clips cochés pour les supprimer d'un coup (null : pas en cours). */
+  const [selected, setSelected] = useState<string[] | null>(null);
+  /** Dernier clip coché : Maj + clic coche la plage jusqu'à lui. */
+  const anchor = useRef<string | null>(null);
+  /** Suppression de la sélection : confirmation, puis en cours. */
+  const [askDelete, setAskDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [auto, setAuto] = useState(false);
   const [settings, setSettings] = useState<false | "all" | "sound">(false);
   /** Menu d'un clip (clic droit, touche Menu, Y) : où l'ouvrir, et la carte qui rend le focus. */
@@ -72,6 +80,7 @@ export function Studio() {
   }, []);
   useEffect(() => { load(); return onHost((event) => { if (event === "clips://changed") load(); }); }, [load]);
   useEffect(() => { if (!error) return; const id = setTimeout(() => setError(null), 4000); return () => clearTimeout(id); }, [error]);
+  useEffect(() => { if (!notice) return; const id = setTimeout(() => setNotice(null), 3000); return () => clearTimeout(id); }, [notice]);
 
   const games = useMemo(() => [...new Set((clips ?? []).map((c) => c.game ?? ""))].sort((a, b) => a.localeCompare(b)), [clips]);
   const shown = useMemo(() => (clips ?? []).filter((c) =>
@@ -116,11 +125,49 @@ export function Studio() {
     try { await host(call, arg); load(); } catch (e) { setError(t("Action impossible : {0}", (e as Error).message)); }
   };
 
+  // sélection : entrer (avec un premier clip), cocher, plage (Maj), tout, supprimer
+  const startSelect = (first?: string) => { setPicked(null); setAskDelete(false); setSelected(first ? [first] : []); anchor.current = first ?? null; };
+  const endSelect = () => { setSelected(null); setAskDelete(false); anchor.current = null; };
+  const toggle = (name: string, range = false) => {
+    setAskDelete(false);
+    // l'ancre est lue maintenant : React appelle la mise à jour plus tard, après son changement
+    const from = range ? anchor.current : null;
+    setSelected((cur) => {
+      const list = cur ?? [];
+      if (from) {
+        const names = shown.map((c) => c.name);
+        const [a, b] = [names.indexOf(from), names.indexOf(name)].sort((x, y) => x - y);
+        if (a >= 0) return [...new Set([...list, ...names.slice(a, b + 1)])];
+      }
+      return list.includes(name) ? list.filter((n) => n !== name) : [...list, name];
+    });
+    anchor.current = name;
+  };
+  const allShown = shown.length > 0 && !!selected && shown.every((c) => selected.includes(c.name));
+  const selectAll = () => { setAskDelete(false); setSelected(allShown ? [] : shown.map((c) => c.name)); };
+  const deleteSelected = async () => {
+    const list = selected ?? [];
+    if (!list.length) return;
+    setDeleting(true);
+    let failed = 0;
+    for (const name of list) await host("clips.delete", { name }).catch(() => { failed++; });
+    setDeleting(false);
+    endSelect();
+    load();
+    const done = list.length - failed;
+    if (failed) setError(t("{0} clips non supprimés", failed));
+    else setNotice(done === 1 ? t("1 clip supprimé") : t("{0} clips supprimés", done));
+  };
+
   // galerie : 1 à 4 (filtres), Ctrl+A (assembler), A (automatique), R (réglages) ; ? partout
   useKeys(!open && !auto && !settings && !help && !menu, (k) => {
     const n = Number(k);
     if (n >= 1 && n <= FILTERS.length) { setFilter(FILTERS[n - 1]); return true; }
-    if (k === "ctrl+a") { setPicked((p) => (p ? null : [])); return true; }
+    // en sélection : Ctrl+A coche tout (ou rien), Suppr demande la suppression
+    if (selected && k === "ctrl+a") { selectAll(); return true; }
+    if (selected && k === "Delete") { if (selected.length) setAskDelete(true); return true; }
+    if (k === "s") { if (selected) endSelect(); else startSelect(); return true; }
+    if (k === "ctrl+a") { setSelected(null); setPicked((p) => (p ? null : [])); return true; }
     if (k === "a") { setAuto(true); return true; }
     if (k === "r") { setSettings("all"); return true; }
     return false;
@@ -135,6 +182,8 @@ export function Studio() {
     else if (sharing) setSharing(false);
     else if (confirm) setConfirm(false);
     else if (open) setOpen(null);
+    else if (askDelete) setAskDelete(false);
+    else if (selected) endSelect();
     else if (picked) setPicked(null);
     else void host("screen.close");
   });
@@ -147,9 +196,9 @@ export function Studio() {
   return (
     <div className="flex h-full flex-col">
       <div className="ibox-rainbow h-1 w-full opacity-80" aria-hidden="true" />
-      <header className="flex items-center gap-4 px-8 pt-5 pb-4">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-3 px-8 pt-5 pb-4">
         <motion.img src={logo} alt="" className="h-12 w-12 drop-shadow-[0_6px_14px_var(--accent-glow)]" initial={{ rotate: -12, scale: 0.8 }} animate={{ rotate: 0, scale: 1 }} transition={SPRING.pop} />
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[11rem] flex-1">
           <h1 className="font-display text-[1.6rem] leading-tight text-ink">{t("iClips Studio")}</h1>
           {clips && <p className="text-[0.85rem] font-semibold text-ink-soft">{clips.length === 1 ? t("1 clip") : t("{0} clips", clips.length)}</p>}
         </div>
@@ -170,7 +219,8 @@ export function Studio() {
             </button>
           ))}
         </div>
-        <Button tone="orange" icon="copy" title={hint(t("Assembler"), "Ctrl+A")} variant={picked ? "primary" : "soft"} aria-pressed={!!picked} onClick={() => setPicked((p) => (p ? null : []))}>{t("Assembler")}</Button>
+        <Button tone="blue" icon="check" title={hint(t("Sélectionner"), "S")} variant={selected ? "primary" : "soft"} aria-pressed={!!selected} onClick={() => (selected ? endSelect() : startSelect())}>{t("Sélectionner")}</Button>
+        <Button tone="orange" icon="copy" title={hint(t("Assembler"), "Ctrl+A")} variant={picked ? "primary" : "soft"} aria-pressed={!!picked} onClick={() => { setSelected(null); setPicked((p) => (p ? null : [])); }}>{t("Assembler")}</Button>
         <Button tone="teal" icon="auto" title={hint(t("Automatique"), "A")} onClick={() => setAuto(true)}>{t("Automatique")}</Button>
         <Button tone="orange" icon="gear" title={hint(t("Réglages"), "R")} onClick={() => setSettings("all")}>{t("Réglages")}</Button>
         <Button tone="blue" variant="ghost" title={hint(t("Raccourcis"), "?")} aria-label={t("Raccourcis")} onClick={() => setHelp(true)} className="px-4 font-extrabold">?</Button>
@@ -217,7 +267,14 @@ export function Studio() {
                 <Card
                   clip={c}
                   order={picked ? picked.indexOf(c.name) + 1 : 0}
-                  onOpen={() => (picked ? !isImage(c) && setPicked((p) => p && (p.includes(c.name) ? p.filter((n) => n !== c.name) : [...p, c.name])) : (setStartMode(null), setOpen(c.name)))}
+                  check={selected ? selected.includes(c.name) : null}
+                  onOpen={(e) => {
+                    // Ctrl + clic : cocher sans entrer dans le lecteur ; Maj + clic : la plage
+                    if (selected || (!picked && (e.ctrlKey || e.shiftKey))) { if (!selected) startSelect(); toggle(c.name, e.shiftKey); return; }
+                    if (picked) { if (!isImage(c)) setPicked((p) => p && (p.includes(c.name) ? p.filter((n) => n !== c.name) : [...p, c.name])); return; }
+                    setStartMode(null);
+                    setOpen(c.name);
+                  }}
                   onMenu={(x, y, from) => setMenu({ name: c.name, x, y, from })}
                 />
               </motion.li>
@@ -255,6 +312,33 @@ export function Studio() {
       <AnimatePresence>{help && <KeysSheet onClose={() => setHelp(false)} />}</AnimatePresence>
 
       <AnimatePresence>
+        {selected && !open && (
+          <motion.div role="toolbar" aria-label={t("Sélection")} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} transition={SPRING.smooth}
+            className="fixed bottom-6 left-1/2 z-[5] flex -translate-x-1/2 items-center gap-3 rounded-full bg-white py-2 pr-2 pl-6 shadow-lg">
+            <AnimatePresence mode="popLayout" initial={false}>
+              {askDelete ? (
+                <motion.div key="ask" className="flex items-center gap-3" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -12 }} transition={SPRING.smooth}>
+                  <span className="tone-red grid h-8 w-8 place-items-center rounded-full bg-[color-mix(in_srgb,var(--tone)_18%,var(--ibox-white))] text-[var(--tone-ink)]"><Icon name="trash" size="1.05em" /></span>
+                  <span className="text-[0.92rem] font-bold whitespace-nowrap text-ink">{selected.length === 1 ? t("Supprimer 1 clip ? Il est effacé de ce PC.") : t("Supprimer {0} clips ? Ils sont effacés de ce PC.", selected.length)}</span>
+                  <Button variant="danger" tone="red" icon="trash" disabled={deleting} onClick={() => void deleteSelected()}>{deleting ? t("Suppression…") : t("Supprimer")}</Button>
+                  <Button data-cancel tone="blue" variant="ghost" disabled={deleting} onClick={() => setAskDelete(false)} autoFocus>{t("Annuler")}</Button>
+                </motion.div>
+              ) : (
+                <motion.div key="bar" className="flex items-center gap-3" initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 12 }} transition={SPRING.smooth}>
+                  <motion.span key={selected.length} initial={{ scale: 1.15 }} animate={{ scale: 1 }} transition={SPRING.pop} className="min-w-[9rem] text-[0.92rem] font-bold text-ink tabular-nums">
+                    {selected.length === 0 ? t("Touchez les clips à choisir") : selected.length === 1 ? t("1 sélectionné") : t("{0} sélectionnés", selected.length)}
+                  </motion.span>
+                  <Button tone="blue" variant="soft" icon="check" title={hint(allShown ? t("Tout désélectionner") : t("Tout sélectionner"), "Ctrl+A")} disabled={!shown.length} onClick={selectAll}>{allShown ? t("Tout désélectionner") : t("Tout sélectionner")}</Button>
+                  <Button tone="red" variant="primary" icon="trash" title={hint(t("Supprimer"), t("Suppr"))} disabled={!selected.length} onClick={() => setAskDelete(true)}>{selected.length ? t("Supprimer ({0})", selected.length) : t("Supprimer")}</Button>
+                  <Button tone="blue" variant="ghost" onClick={endSelect}>{t("Terminé")}</Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {picked && !open && (
           <motion.div data-nav-scope initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} transition={SPRING.smooth} className="fixed bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-white py-2 pr-2 pl-6 shadow-lg">
             <span className="text-[0.92rem] font-bold text-ink">{picked.length < 2 ? t("Choisissez les clips dans l’ordre voulu") : t("{0} clips choisis", picked.length)}</span>
@@ -283,6 +367,14 @@ export function Studio() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {notice && (
+          <motion.div role="status" initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={SPRING.snappy} className="tone-green fixed top-6 left-1/2 z-20 inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--tone)] px-5 py-3 text-[0.9rem] font-bold text-[var(--tone-on)] shadow-lg">
+            <Icon name="check" />{notice}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* menu d'un clip : dernier de la page, il garde la navigation pour lui (nav.ts) */}
       <AnimatePresence>
         {menu && (() => {
@@ -296,6 +388,7 @@ export function Studio() {
               onOpen={() => { setMenu(null); setStartMode(null); setOpen(c.name); }}
               onEdit={() => { setMenu(null); setStartMode("cut"); setOpen(c.name); }}
               onDelete={() => { setMenu(null); void act("clips.delete", { name: c.name }); }}
+              onSelect={() => { setMenu(null); if (selected) { if (!selected.includes(c.name)) toggle(c.name); } else startSelect(c.name); }}
             />
           );
         })()}
@@ -317,12 +410,12 @@ function autoLabel(how: NonNullable<Clip["auto"]>) {
   return how === "voice" ? t("Gardé à la voix") : how === "pad" ? t("Gardé à la manette") : t("Gardé en fin de partie");
 }
 
-function Card({ clip: c, order, onOpen, onMenu }: { clip: Clip; order: number; onOpen: () => void; onMenu: (x: number, y: number, from: HTMLElement) => void }) {
+function Card({ clip: c, order, check, onOpen, onMenu }: { clip: Clip; order: number; check: boolean | null; onOpen: (e: React.MouseEvent) => void; onMenu: (x: number, y: number, from: HTMLElement) => void }) {
   const [length, setLength] = useState(c.duration ?? 0);
   const src = clipUrl(c);
   const thumb = thumbUrl(c);
   return (
-    <button type="button" data-nav data-card draggable aria-haspopup="menu" onDragStart={(e) => dragOut(e, c)} onClick={onOpen}
+    <button type="button" data-nav data-card draggable aria-haspopup="menu" aria-pressed={check ?? undefined} onDragStart={(e) => dragOut(e, c)} onClick={onOpen}
       onContextMenu={(e) => {
         // clic droit : au pointeur ; touche Menu, Maj+F10 ou manette (Y, Menu) : au centre de la carte
         e.preventDefault();
@@ -336,7 +429,7 @@ function Card({ clip: c, order, onOpen, onMenu }: { clip: Clip; order: number; o
         // touche Menu ou Maj+F10 : Windows ne l'envoie pas toujours comme un clic droit
         if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) { e.preventDefault(); openMenu(e.currentTarget); }
       }}
-      className={`tone-${kindTone(c)} ibox-tile group block w-full overflow-hidden rounded-xl text-left`}>
+      className={`tone-${kindTone(c)} ibox-tile group relative block w-full overflow-hidden rounded-xl text-left transition-transform duration-200 ${check ? "scale-[0.97] shadow-[0_0_0_3px_var(--accent)]" : ""}`}>
       <div className="relative aspect-video bg-cream-deep">
         {/* première image du clip, sans le son : rien ne joue avant l'ouverture */}
         {isImage(c) ? (
@@ -351,7 +444,7 @@ function Card({ clip: c, order, onOpen, onMenu }: { clip: Clip; order: number; o
         </span>
         {length > 0 && <span className="absolute right-2 bottom-2 rounded-full bg-black/60 px-2 py-0.5 text-[0.75rem] font-extrabold text-[#fff]">{duration(length)}</span>}
         {c.favorite && <span className="tone-yellow absolute top-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-[var(--tone)] text-[var(--tone-on)] shadow-md" aria-label={t("Favori")}><Icon name="star" filled size="1.05em" /></span>}
-        {c.kind !== "video" && c.kind && (
+        {check === null && c.kind !== "video" && c.kind && (
           <span className="absolute top-2 right-2 rounded-full bg-[var(--tone)] px-2.5 py-0.5 text-[0.72rem] font-extrabold tracking-wide text-[var(--tone-on)] uppercase shadow-md">{c.kind === "gif" ? "GIF" : t("Capture")}</span>
         )}
         {c.auto && (
@@ -360,6 +453,16 @@ function Card({ clip: c, order, onOpen, onMenu }: { clip: Clip; order: number; o
             <span className="sr-only">{autoLabel(c.auto)}</span>
           </span>
         )}
+        {/* sélection : voile et case ronde en haut à droite */}
+        <AnimatePresence>
+          {check !== null && (
+            <motion.span aria-hidden="true" initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }} transition={SPRING.pop}
+              className={`absolute top-2 right-2 z-[1] grid h-8 w-8 place-items-center rounded-full border-2 shadow-md transition-colors ${check ? "border-[var(--accent)] bg-[var(--accent)] text-[#fff]" : "border-[#fff] bg-black/35 text-transparent"}`}>
+              <Icon name="check" size="1.05em" />
+            </motion.span>
+          )}
+        </AnimatePresence>
+        {check && <span aria-hidden="true" className="absolute inset-0 bg-[var(--accent)]/15" />}
         {order > 0 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING.pop} className="tone-orange absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full bg-[var(--tone)] text-[0.95rem] font-extrabold text-[#fff] shadow-md">{order}</motion.span>}
       </div>
       <div className="px-4 py-3">

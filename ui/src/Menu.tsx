@@ -1,7 +1,8 @@
 /**
  * Menu d'un clip dans la galerie du Studio (0.7.1) : clic droit sur une carte, touche Menu ou
  * Maj+F10 au clavier, Y ou Menu à la manette. « Modifier le clip » ouvre le montage ;
- * « Supprimer » demande confirmation dans le menu même (Annuler revient à la liste).
+ * « Sélectionner plusieurs clips » ouvre la sélection ; « Supprimer » demande confirmation dans le
+ * menu même (Annuler revient à la liste).
  * Flèches, Entrée et Échap au clavier ; croix, A et B à la manette (nav.ts).
  */
 import { AnimatePresence, motion } from "motion/react";
@@ -29,8 +30,8 @@ function deleteQuestion(c: Clip) {
   return c.kind === "image" ? t("Supprimer cette capture ? Elle est effacée de ce PC.") : c.kind === "gif" ? t("Supprimer ce GIF ? Il est effacé de ce PC.") : t("Supprimer ce clip ? Il est effacé de ce PC.");
 }
 
-export function ClipMenu({ clip: c, at, onEdit, onOpen, onDelete, onClose }: {
-  clip: Clip; at: { x: number; y: number }; onEdit: () => void; onOpen: () => void; onDelete: () => void; onClose: () => void;
+export function ClipMenu({ clip: c, at, onEdit, onOpen, onDelete, onSelect, onClose }: {
+  clip: Clip; at: { x: number; y: number }; onEdit: () => void; onOpen: () => void; onDelete: () => void; onSelect: () => void; onClose: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [confirm, setConfirm] = useState(false);
@@ -100,7 +101,8 @@ export function ClipMenu({ clip: c, at, onEdit, onOpen, onDelete, onClose }: {
               {image
                 ? <Item icon="play" tone="accent" label={t("Ouvrir")} index={0} onClick={onOpen} />
                 : <Item icon="cut" tone="orange" label={t("Modifier le clip")} index={0} onClick={onEdit} />}
-              <Item icon="trash" tone="red" label={deleteLabel(c)} hint={t("Suppr")} index={1} onClick={() => setConfirm(true)} />
+              <Item icon="check" tone="blue" label={t("Sélectionner plusieurs clips")} hint="S" index={1} onClick={onSelect} />
+              <Item icon="trash" tone="red" label={deleteLabel(c)} hint={t("Suppr")} index={2} onClick={() => setConfirm(true)} />
             </motion.ul>
           )}
         </AnimatePresence>
