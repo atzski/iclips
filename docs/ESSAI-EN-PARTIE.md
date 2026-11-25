@@ -5,7 +5,7 @@ Environ 10 minutes, dans la copie d'essai d'iBox. Elle a ses propres données : 
 ## Avant
 
 1. **Ferme ton iBox installé** : il garde Alt+X pour lui. Clic droit sur son icône près de l'horloge, puis Quitter.
-2. Double-clique sur `Documents\iBox-sauvegarde\plugin-test\Lancer l'essai iClips.cmd`.
+2. Double-clique sur `Documents\iBox-sauvegarde\plugin-test\Lancer-essai-iClips.cmd` (ou directement sur `ibox-manualtest.exe`, dans le même dossier).
 3. La copie est en anglais. Pour le français : Settings › Language › Français (facultatif).
 4. Ouvre iClips Studio : Paramètres › Plugins › iClips › **Ouvrir iClips Studio**.
 
