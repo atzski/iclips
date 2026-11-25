@@ -66,6 +66,9 @@ const PAUSE_MAX_MS: u64 = 10_000;
 /// Après la pause, la voix reste sourde 1,5 s : le moteur rend parfois une phrase entendue
 /// juste avant la fin de la lecture (le son du clip qui sort des haut-parleurs).
 const PAUSE_GRACE_MS: u64 = 1_500;
+/// Après chaque clip gardé, la voix reste sourde 3 s (+ la grâce) : le son de déclencheur de la
+/// notification, entendu par le micro, était pris pour « Clip ça ! » et relançait un clip en boucle.
+const AFTER_CLIP_MS: u64 = 3_000;
 
 static SETTINGS: Mutex<Option<Auto>> = Mutex::new(None);
 /// Mémoire des clips tenue en ce moment : partie en cours, ou partout si demandé (`capture.rs`).
@@ -179,7 +182,12 @@ fn quiet_until(current: u64, at: u64, ms: u64) -> u64 {
 /// sort des haut-parleurs. Les réglages enregistrés ne changent pas ; le micro reste ouvert
 /// (pas de nouvelle notification d'écoute), seules les phrases reconnues sont écartées.
 pub fn pause(app: &AppHandle, arg: &Value) -> Value {
-    let ms = arg["ms"].as_u64().unwrap_or(0);
+    hush(arg["ms"].as_u64().unwrap_or(0));
+    status(app)
+}
+
+/// Pose, prolonge ou lève la surdité de la voix (voir `quiet_until`).
+fn hush(ms: u64) {
     let at = now();
     let mut current = QUIET_UNTIL.load(Ordering::Relaxed);
     loop {
@@ -188,7 +196,6 @@ pub fn pause(app: &AppHandle, arg: &Value) -> Value {
             Err(seen) => current = seen,
         }
     }
-    status(app)
 }
 
 /// Un clip automatique peut-il partir maintenant ? (pas deux à moins de 5 s)
@@ -213,7 +220,10 @@ fn toast(app: &AppHandle, title: &str, body: &str, icon: &str, tone: &str) {
 }
 
 fn save(app: &AppHandle, how: &'static str) {
-    match tauri::async_runtime::block_on(crate::capture::save_clip_as(app.clone(), Some(how))) {
+    let saved = tauri::async_runtime::block_on(crate::capture::save_clip_as(app.clone(), Some(how)));
+    // la notification qui suit sonne : le micro ne doit pas la prendre pour la phrase
+    hush(AFTER_CLIP_MS);
+    match saved {
         // notification d'iClips : jaquette du jeu, son de déclencheur d'appareil photo
         Ok(c) => crate::toast::push(app, json!({
             "kind": "clip", "friendId": "", "name": c.game.clone().unwrap_or_else(|| "Bureau".into()),
@@ -254,9 +264,10 @@ pub(crate) fn heard(app: &AppHandle) {
         crate::host::notify(app, "voice://heard", Value::Null);
         return;
     }
-    // un clip rejoué dans iClips : la phrase vient du clip, pas du joueur
+    // un clip rejoué dans iClips, ou la notification d'un clip qui vient d'être gardé :
+    // la phrase vient des haut-parleurs, pas du joueur
     if QUIET_UNTIL.load(Ordering::Relaxed) > now() {
-        eprintln!("iClips : « Clip ça ! » écarté (clip en lecture dans iClips)");
+        eprintln!("iClips : « Clip ça ! » écarté (clip en lecture ou notification de clip)");
         return;
     }
     if armed(app).voice {
@@ -357,6 +368,11 @@ mod tests {
         assert_eq!(b, 2_000 + PAUSE_GRACE_MS);
         // lever une pause déjà finie ne la rallume pas
         assert_eq!(quiet_until(0, 9_000, 0), 0);
+        // clip gardé à t = 20 s : sourde pendant que la notification sonne, puis la voix revient
+        let c = quiet_until(0, 20_000, AFTER_CLIP_MS);
+        assert!(c >= 20_000 + 4_000 && c <= 20_000 + COOLDOWN_MS);
+        // une lecture plus longue en cours n'est pas raccourcie par un clip gardé
+        assert_eq!(quiet_until(30_000, 20_000, AFTER_CLIP_MS), 30_000);
     }
 
     #[test]
