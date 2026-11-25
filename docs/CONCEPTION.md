@@ -25,7 +25,7 @@ La fenêtre du plugin n'appelle aucune commande d'iBox : tout passe par `POST /i
 
 | Étape | Contenu | État |
 |---|---|---|
-| **C1. Socle et squelette** | iBox : permission `clips`, écran `screen` (fenêtre `plugin-<id>:screen`), appels `clips.*`, lecture des vidéos par morceaux, blocage des commandes d'iBox pour les fenêtres de plugin, bouton « Ouvrir » dans Paramètres › Plugins. Plugin : Studio (galerie, lecteur, titre, favori, suppression), paquet signé. | Fait le 25/11/2026, non publié ; essai dans un vrai iBox à faire |
+| **C1. Socle et squelette** | iBox : permission `clips`, écran `screen` (fenêtre `plugin-<id>:screen`), appels `clips.*`, lecture des vidéos par morceaux, blocage des commandes d'iBox pour les fenêtres de plugin, bouton « Ouvrir » dans Paramètres › Plugins. Plugin : Studio (galerie, lecteur, titre, favori, suppression), paquet signé. | Fait le 25/11/2026, non publié ; essayé dans la copie isolée d’iBox (`app.ibox.manualtest`, `DocumentsiBox-sauvegardeplugin-testessai-iclips.ps1`) |
 | C2. Panneau en jeu | Overlay générique empaqueté (`overlay.entry`), vignettes natives, index des clips | |
 | C3. Montage | Coupe, assemblage, titre, export | |
 | C4. Clips automatiques | « Clip ça ! », combo, fin de partie | |
