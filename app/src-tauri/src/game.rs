@@ -29,6 +29,10 @@ const NOT_GAMES: &[&str] = &[
     "ubisoftconnect.exe", "upc.exe", "uplaywebcore.exe", "rsi launcher.exe", "battle.net.exe", "agent.exe",
     // Wallpaper Engine tourne en permanence : ce n'est pas une partie
     "wallpaper32.exe", "wallpaper64.exe", "webwallpaper32.exe", "wallpaperservice32.exe", "wallpaperservice32_c.exe",
+    // applications de bureau souvent en plein écran sans bordure (Electron, diaporama, photos)
+    "claude.exe", "chatgpt.exe", "code.exe", "cursor.exe", "slack.exe", "ms-teams.exe", "teams.exe", "notion.exe", "figma.exe",
+    "spotify.exe", "whatsapp.exe", "telegram.exe", "signal.exe", "obsidian.exe", "zoom.exe", "windowsterminal.exe",
+    "powerpnt.exe", "microsoft.photos.exe", "photos.exe",
     // iClips et iBox eux-mêmes
     "iclips.exe", "ibox.exe",
 ];
@@ -184,7 +188,8 @@ mod tests {
     #[test]
     fn ni_navigateur_ni_explorateur_ni_wallpaper_engine() {
         for exe in [r"C:\Windows\explorer.exe", r"C:\Program Files\Google\Chrome\Application\chrome.exe", r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
-            r"C:\Steam\steamapps\common\wallpaper_engine\wallpaper64.exe", r"C:\Steam\steamapps\common\wallpaper_engine\bin\webwallpaper32.exe", r"C:\Program Files\VideoLAN\VLC\vlc.exe"] {
+            r"C:\Steam\steamapps\common\wallpaper_engine\wallpaper64.exe", r"C:\Steam\steamapps\common\wallpaper_engine\bin\webwallpaper32.exe", r"C:\Program Files\VideoLAN\VLC\vlc.exe",
+            r"C:\Users\x\AppData\Local\AnthropicClaude\app-1.0.0\claude.exe", r"C:\Users\x\AppData\Local\Programs\Microsoft VS Code\Code.exe"] {
             assert_eq!(classify(exe, "Plein écran", true, false), None, "{exe}");
         }
     }
