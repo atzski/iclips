@@ -7,6 +7,30 @@ const PATHS = {
   play: <path d="M8 5.5v13l10-6.5z" fill="currentColor" />,
   x: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  mic: (
+    <>
+      <rect x="9" y="3.5" width="6" height="11" rx="3" />
+      <path d="M6 11.5a6 6 0 0 0 12 0M12 17.5v3" />
+    </>
+  ),
+  pad: (
+    <>
+      <path d="M7.5 8h9a4.5 4.5 0 0 1 4.4 5.4l-.8 3.6a2.3 2.3 0 0 1-4 .9L14.5 16h-5l-1.6 1.9a2.3 2.3 0 0 1-4-.9l-.8-3.6A4.5 4.5 0 0 1 7.5 8z" />
+      <path d="M8.5 10.5v3M7 12h3" />
+    </>
+  ),
+  flag: (
+    <>
+      <path d="M6 20.5V4" />
+      <path d="M6 4.5h10.5l-2 3.5 2 3.5H6" />
+    </>
+  ),
+  auto: (
+    <>
+      <path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" />
+      <circle cx="12" cy="12" r="4" />
+    </>
+  ),
   trash: (
     <>
       <path d="M4.5 7h15" />

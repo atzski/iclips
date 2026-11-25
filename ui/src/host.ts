@@ -23,6 +23,8 @@ export interface Clip {
   /** Vignette faite par le Studio (`__thumbs/<nom>`), et durée en secondes. */
   thumb?: string | null;
   duration?: number | null;
+  /** Clip automatique : « Clip ça ! », Vue + A ou fin de partie. */
+  auto?: "voice" | "pad" | "end" | null;
 }
 
 /** État de la mémoire des clips (permission `clips-capture`). */
@@ -34,6 +36,19 @@ export interface ClipStatus {
   /** Secondes déjà en mémoire, et durée réglée. */
   seconds: number;
   max: number;
+  /** Le micro écoute « Clip ça ! » (clips automatiques). */
+  listening?: boolean;
+}
+
+/** Clips automatiques (permission `clips-auto`). */
+export interface AutoStatus {
+  voice: boolean;
+  pad: boolean;
+  end: boolean;
+  listening: boolean;
+  /** Langue d'écoute (`fr-FR`…), null si Windows n'en a aucune. */
+  language: string | null;
+  error: string | null;
 }
 
 /** Hors d'iBox (aperçu `npm run dev`), des clips d'exemple sans vidéo. */
@@ -41,9 +56,11 @@ const inIbox = typeof location !== "undefined" && (location.hostname === "iboxpl
 
 let sample: Clip[] = [
   { name: "1764060000000-hollow-knight.mp4", game: "Hollow Knight", platformId: "pc", at: Date.now() - 3_600_000, size: 18_400_000, title: "Mante sans un coup", favorite: true, src: "" },
-  { name: "1763990000000-celeste.mp4", game: "Celeste", platformId: "pc", at: Date.now() - 86_400_000, size: 9_100_000, title: null, favorite: false, src: "" },
+  { name: "1763990000000-celeste.mp4", game: "Celeste", platformId: "pc", at: Date.now() - 86_400_000, size: 9_100_000, title: null, favorite: false, src: "", auto: "voice" },
   { name: "1763900000000-mario-kart-8-deluxe.mp4", game: "Mario Kart 8 Deluxe", platformId: "switch", at: Date.now() - 3 * 86_400_000, size: 31_000_000, title: null, favorite: false, src: "" },
 ];
+
+let auto: AutoStatus = { voice: false, pad: true, end: false, listening: false, language: "fr-FR", error: null };
 
 function preview(call: string, arg: Record<string, unknown>): unknown {
   if (call === "clips.list") return sample;
@@ -67,6 +84,16 @@ function preview(call: string, arg: Record<string, unknown>): unknown {
       emit("edit://done", { job, name: c.name });
     }, 1500);
     return { job };
+  }
+  if (call === "auto.get") return auto;
+  if (call === "auto.set") {
+    auto = { ...auto, ...(arg as Partial<AutoStatus>) };
+    return auto;
+  }
+  if (call === "auto.test") {
+    // aperçu : la phrase est « entendue » au bout de deux secondes
+    setTimeout(() => window.dispatchEvent(new CustomEvent("ibox:host", { detail: { event: "voice://heard", payload: null } })), 2000);
+    return { ms: 8000 };
   }
   if (call === "clips.status") return { game: "Hollow Knight", platformId: "pc", enabled: true, seconds: 30, max: 30 } satisfies ClipStatus;
   if (call === "clips.save") {

@@ -1,8 +1,8 @@
 /**
  * iClips Studio : la galerie des clips du profil iBox (vignettes, filtre par jeu et favoris),
  * un lecteur, le titre et le favori de chaque clip, la suppression, et le montage (0.3) :
- * couper un passage, en faire un GIF, assembler plusieurs clips. Les clips automatiques et
- * le partage viennent ensuite (docs/CONCEPTION.md).
+ * couper un passage, en faire un GIF, assembler plusieurs clips. Clips automatiques (0.4) :
+ * réglages dans `Auto.tsx`, marque sur les cartes. Le partage vient ensuite (docs/CONCEPTION.md).
  */
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -11,6 +11,7 @@ import { clipUrl, host, onHost, thumbUrl, type Clip } from "./host";
 import { makeThumb } from "./thumbs";
 import { joinSegments, useRender, type Span } from "./edit";
 import { Trim } from "./Trim";
+import { AutoSheet } from "./Auto";
 import { duration, size, when } from "./format";
 import { t } from "./i18n";
 import { useNav } from "./nav";
@@ -29,6 +30,7 @@ export function Studio() {
   const [error, setError] = useState<string | null>(null);
   /** Assemblage : clips choisis, dans l'ordre (null : pas en cours). */
   const [picked, setPicked] = useState<string[] | null>(null);
+  const [auto, setAuto] = useState(false);
 
   const load = useCallback(() => {
     host<Clip[]>("clips.list").then(setClips).catch((e: Error) => { setClips([]); setError(t("Action impossible : {0}", e.message)); });
@@ -76,7 +78,8 @@ export function Studio() {
   };
 
   useNav(() => {
-    if (confirm) setConfirm(false);
+    if (auto) setAuto(false);
+    else if (confirm) setConfirm(false);
     else if (open) setOpen(null);
     else if (picked) setPicked(null);
     else void host("screen.close");
@@ -110,6 +113,7 @@ export function Studio() {
           ))}
         </div>
         <Button variant={picked ? "primary" : "soft"} aria-pressed={!!picked} onClick={() => setPicked((p) => (p ? null : []))}>{t("Assembler")}</Button>
+        <Button icon="auto" onClick={() => setAuto(true)}>{t("Automatique")}</Button>
         <Button variant="ghost" icon="x" onClick={() => void host("screen.close")}>{t("Fermer")}</Button>
       </header>
 
@@ -164,6 +168,8 @@ export function Studio() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>{auto && <AutoSheet onClose={() => setAuto(false)} />}</AnimatePresence>
+
       <AnimatePresence>
         {picked && !open && (
           <motion.div data-nav-scope initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }} transition={SPRING.smooth} className="fixed bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3 rounded-full bg-white py-2 pr-2 pl-6 shadow-lg">
@@ -200,6 +206,10 @@ function label(c: Clip) {
   return c.title ?? c.game ?? t("Hors jeu");
 }
 
+function autoLabel(how: NonNullable<Clip["auto"]>) {
+  return how === "voice" ? t("Gardé à la voix") : how === "pad" ? t("Gardé à la manette") : t("Gardé en fin de partie");
+}
+
 function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: () => void }) {
   const [length, setLength] = useState(c.duration ?? 0);
   const src = clipUrl(c);
@@ -220,6 +230,12 @@ function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: (
         </span>
         {length > 0 && <span className="absolute right-2 bottom-2 rounded-full bg-black/60 px-2 py-0.5 text-[0.75rem] font-extrabold text-white">{duration(length)}</span>}
         {c.favorite && <span className="absolute top-2 left-2 text-accent drop-shadow" aria-label={t("Favori")}><Icon name="star" filled /></span>}
+        {c.auto && (
+          <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[0.75rem] font-extrabold text-white" title={autoLabel(c.auto)}>
+            <Icon name={c.auto === "voice" ? "mic" : c.auto === "pad" ? "pad" : "flag"} size="1.1em" />
+            <span className="sr-only">{autoLabel(c.auto)}</span>
+          </span>
+        )}
         {order > 0 && <span className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full bg-accent text-[0.95rem] font-extrabold text-on-accent shadow-md">{order}</span>}
       </div>
       <div className="px-4 py-3">
@@ -282,8 +298,8 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
             <Button icon="trash" onClick={onDelete}>{t("Supprimer")}</Button>
           )}
         </div>
-        {cutting && <Trim video={video} length={length} busy={busy} onRender={onRender} />}
-        <div className="px-6 pb-4 text-[0.8rem] font-semibold text-ink-soft">{[c.game, when(c.at), size(c.size)].filter(Boolean).join(" · ")}</div>
+        {cutting && <Trim video={video} src={src} length={length} busy={busy} onRender={onRender} />}
+        <div className="px-6 pb-4 text-[0.8rem] font-semibold text-ink-soft">{[c.game, when(c.at), size(c.size), c.auto ? autoLabel(c.auto) : null].filter(Boolean).join(" · ")}</div>
       </motion.div>
     </motion.div>
   );

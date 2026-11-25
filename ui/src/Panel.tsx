@@ -39,6 +39,7 @@ export function Panel() {
     return onHost((event, payload) => {
       if (event === "panel://open") { setSaved(null); setError(null); setOpen(true); refresh(); }
       else if (event === "panel://close-request") setOpen(false);
+      else if (event === "voice://state") refresh();
       else if (event === "pad" && typeof payload === "string") padAction(payload, close);
     });
   }, [refresh, close]);
@@ -97,6 +98,12 @@ export function Panel() {
                 <div className="font-display text-[1.25rem] leading-tight text-ink">iClips</div>
                 <div className="truncate text-[0.85rem] font-semibold text-ink-soft">{status?.game ?? t("Hors partie")}</div>
               </div>
+              {status?.listening && (
+                <span role="status" className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[0.8rem] font-extrabold text-accent-text">
+                  <Icon name="mic" size="1.1em" />
+                  {t("Le micro écoute")}
+                </span>
+              )}
               <Button variant="ghost" icon="x" aria-label={t("Fermer")} onClick={close} className="px-3" />
             </header>
 

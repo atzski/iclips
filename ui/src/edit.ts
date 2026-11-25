@@ -11,6 +11,7 @@ export const GIF_MAX = 10;
 const UNKNOWN = 35;
 
 export interface Span { start: number; end: number }
+export type Edge = "start" | "end";
 
 /** Bornes d'un passage dans un clip de `length` s : début avant fin, une demi-seconde au moins. */
 export function clampSpan(span: Span, length: number): Span {
@@ -21,6 +22,13 @@ export function clampSpan(span: Span, length: number): Span {
 }
 
 const round = (s: number) => Math.round(s * 10) / 10;
+
+/** Poignée tirée à `at` : l'autre bout ne bouge pas, une demi-seconde reste entre les deux. */
+export function setEdge(span: Span, edge: Edge, at: number, length: number): Span {
+  return edge === "start"
+    ? clampSpan({ start: Math.min(at, span.end - 0.5), end: span.end }, length)
+    : clampSpan({ start: span.start, end: Math.max(at, span.start + 0.5) }, length);
+}
 
 /** Assemblage de clips entiers, dans l'ordre choisi. */
 export function joinSegments(clips: { name: string; duration?: number | null }[]) {

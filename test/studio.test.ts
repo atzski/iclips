@@ -63,3 +63,31 @@ describe("montage", () => {
     ]);
   });
 });
+
+describe("clips automatiques", () => {
+  it("dit la phrase dans la langue d'écoute", async () => {
+    const { phrase } = await import("../ui/src/Auto");
+    expect(phrase("fr-FR")).toBe("« Clip ça ! »");
+    expect(phrase("en-US")).toBe("“Clip that!”");
+    expect(phrase(null)).toBe("« Clip ça ! »");
+  });
+});
+
+describe("poignées de la coupe", () => {
+  it("bougent un bout sans croiser l'autre", async () => {
+    const { setEdge } = await import("../ui/src/edit");
+    expect(setEdge({ start: 2, end: 6 }, "start", -3, 12)).toEqual({ start: 0, end: 6 });
+    expect(setEdge({ start: 2, end: 6 }, "start", 9, 12)).toEqual({ start: 5.5, end: 6 });
+    expect(setEdge({ start: 2, end: 6 }, "end", 1, 12)).toEqual({ start: 2, end: 2.5 });
+    expect(setEdge({ start: 2, end: 6 }, "end", 20, 12)).toEqual({ start: 2, end: 12 });
+  });
+});
+
+describe("instants de l'éditeur", () => {
+  it("au dixième", async () => {
+    const { instant } = await import("../ui/src/format");
+    expect(instant(2.6)).toMatch(/^0:02[.,]6$/);
+    expect(instant(61.04)).toMatch(/^1:01[.,]0$/);
+    expect(instant(-1)).toMatch(/^0:00[.,]0$/);
+  });
+});

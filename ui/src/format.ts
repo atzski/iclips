@@ -7,6 +7,14 @@ export function duration(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** Instant dans l'éditeur, au dixième : `0:02,6` (`0:02.6` en anglais). */
+export function instant(seconds: number): string {
+  const d = Math.round(Math.max(0, Number.isFinite(seconds) ? seconds : 0) * 10);
+  const s = Math.floor(d / 10);
+  const sep = locale === "fr-FR" ? "," : ".";
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}${sep}${d % 10}`;
+}
+
 export function size(bytes: number): string {
   if (!bytes) return "";
   const fr = locale === "fr-FR";

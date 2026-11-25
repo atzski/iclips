@@ -35,6 +35,11 @@ export function move(dir: Dir): void {
   if (!list.length) return;
   const current = document.activeElement as HTMLElement | null;
   if (!current || !list.includes(current)) { list[0].focus(); return; }
+  // réglage (poignée de la coupe) : gauche et droite le changent au lieu de quitter l'élément
+  if (current.hasAttribute("data-adjust") && (dir === "left" || dir === "right")) {
+    current.dispatchEvent(new CustomEvent("nav-adjust", { detail: dir }));
+    return;
+  }
   const box = (el: HTMLElement): Box => { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; };
   const others = list.filter((el) => el !== current);
   const i = pick(box(current), others.map(box), dir);

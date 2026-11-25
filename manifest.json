@@ -1,12 +1,12 @@
 {
   "id": "iclips",
   "name": "iClips",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": {
     "name": "atzski",
     "username": "atzski"
   },
-  "description": "Le studio de vos clips de jeu : un panneau en jeu pour garder le moment, une galerie pour le revoir, le couper, l'assembler ou en faire un GIF.",
+  "description": "Le studio de vos clips de jeu : un panneau en jeu pour garder le moment, à la voix (« Clip ça ! ») ou à la manette, une galerie pour le revoir, le couper, l'assembler ou en faire un GIF.",
   "ibox": ">=1.0.8",
   "platforms": [
     "windows"
@@ -15,6 +15,7 @@
     "clips",
     "clips-capture",
     "clips-edit",
+    "clips-auto",
     "overlay",
     "hotkey",
     "gamepad"
