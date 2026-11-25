@@ -41,7 +41,8 @@ export function Slider({ label, value, onChange }: { label: string; value: numbe
         aria-label={label}
         aria-valuetext={`${pct} %`}
         onChange={(e) => onChange(Number(e.target.value) / 100)}
-        className="h-2 min-w-0 flex-1 cursor-pointer accent-[var(--tone,var(--accent))]"
+        style={{ "--fill": `${pct / 2}%` } as React.CSSProperties}
+        className="ibox-range min-w-0 flex-1 cursor-pointer"
       />
       <span className="w-14 text-right text-[0.88rem] font-extrabold text-ink tabular-nums">{pct} %</span>
     </div>
