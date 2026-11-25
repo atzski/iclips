@@ -25,7 +25,13 @@ export interface Clip {
   duration?: number | null;
   /** Clip automatique : « Clip ça ! », Vue + A ou fin de partie. */
   auto?: "voice" | "pad" | "end" | null;
+  /** Lien de partage (Litterbox) et sa fin de validité (ms). */
+  link?: string | null;
+  linkUntil?: number | null;
 }
+
+/** Ami iNetbox (partage d'un lien). */
+export interface Friend { id: string; name: string; online: boolean; game: string | null }
 
 /** État de la mémoire des clips (permission `clips-capture`). */
 export interface ClipStatus {
@@ -85,6 +91,20 @@ function preview(call: string, arg: Record<string, unknown>): unknown {
     }, 1500);
     return { job };
   }
+  if (call === "share.friends") return [
+    { id: "a", name: "Léa", online: true, game: "Celeste" },
+    { id: "b", name: "Sam", online: false, game: null },
+  ] satisfies Friend[];
+  if (call === "share.link") {
+    // aperçu : un envoi imité, en deux secondes
+    const job = Math.floor(Math.random() * 1e6);
+    const emit = (event: string, payload: unknown) => window.dispatchEvent(new CustomEvent("ibox:host", { detail: { event, payload } }));
+    [0.2, 0.5, 0.8].forEach((ratio, i) => setTimeout(() => emit("share://progress", { job, ratio }), 400 * (i + 1)));
+    setTimeout(() => emit("share://done", { job, name: arg.name, link: "https://litter.catbox.moe/apercu.mp4", until: Date.now() + 72 * 3_600_000 }), 2000);
+    return { job };
+  }
+  if (call === "share.save") return { path: "C:\\Users\\apercu\\Videos\\clip.mp4" };
+  if (call.startsWith("share.")) return null;
   if (call === "auto.get") return auto;
   if (call === "auto.set") {
     auto = { ...auto, ...(arg as Partial<AutoStatus>) };

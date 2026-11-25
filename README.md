@@ -1,6 +1,6 @@
 # iClips
 
-Plugin pour [iBox](https://github.com/atzski/ibox) : le studio de vos clips de jeu. Galerie, lecteur, titres et favoris, montage (coupe, assemblage, GIF), clips automatiques (commande vocale « Clip ça ! », Vue + A à la manette, fin de partie). Partage entre amis à venir.
+Plugin pour [iBox](https://github.com/atzski/ibox) : le studio de vos clips de jeu. Galerie, lecteur, titres et favoris, montage (coupe, assemblage, GIF), clips automatiques (commande vocale « Clip ça ! », Vue + A à la manette, fin de partie), partage (glisser le clip dans Discord, copier, lien de 72 h, envoi à un ami iBox, format vertical 9:16).
 
 Conception et étapes : [docs/CONCEPTION.md](docs/CONCEPTION.md).
 

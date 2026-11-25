@@ -12,6 +12,8 @@ import { makeThumb } from "./thumbs";
 import { joinSegments, useRender, type Span } from "./edit";
 import { Trim } from "./Trim";
 import { AutoSheet } from "./Auto";
+import { dragOut, ShareSheet } from "./Share";
+import { Vertical } from "./Vertical";
 import { duration, size, when } from "./format";
 import { t } from "./i18n";
 import { useNav } from "./nav";
@@ -64,10 +66,12 @@ export function Studio() {
   );
   const startRender = (arg: Record<string, unknown>, label: string) =>
     void render(arg, label).catch((e: Error) => setError(t("Montage impossible : {0}", e.message)));
-  const trim = (c: Clip, kind: "mp4" | "gif", span: Span) =>
+  const trim = (c: Clip, kind: "mp4" | "gif" | "vertical", span: Span, focus = 0.5) =>
     kind === "mp4"
       ? startRender({ kind, segments: [{ name: c.name, ...span }], title: c.title ? t("{0} (coupé)", c.title) : undefined }, t("Coupe du clip…"))
-      : startRender({ kind, name: c.name, ...span }, t("Création du GIF…"));
+      : kind === "vertical"
+        ? startRender({ kind, name: c.name, ...span, focus }, t("Format vertical…"))
+        : startRender({ kind, name: c.name, ...span }, t("Création du GIF…"));
   const join = () => {
     const list = (picked ?? []).map((n) => clips?.find((c) => c.name === n)).filter((c): c is Clip => !!c);
     startRender({ kind: "mp4", segments: joinSegments(list) }, t("Assemblage de {0} clips…", list.length));
@@ -163,7 +167,7 @@ export function Studio() {
             onDelete={() => (confirm ? (setConfirm(false), setOpen(null), void act("clips.delete", { name: current.name })) : setConfirm(true))}
             onCancel={() => setConfirm(false)}
             busy={!!job}
-            onRender={(kind, span) => trim(current, kind, span)}
+            onRender={(kind, span, focus) => trim(current, kind, span, focus)}
           />
         )}
       </AnimatePresence>
@@ -215,7 +219,7 @@ function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: (
   const src = clipUrl(c);
   const thumb = thumbUrl(c);
   return (
-    <button type="button" data-nav data-card onClick={onOpen} className="group block w-full overflow-hidden rounded-xl bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <button type="button" data-nav data-card draggable onDragStart={(e) => dragOut(e, c)} onClick={onOpen} className="group block w-full overflow-hidden rounded-xl bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="relative aspect-video bg-cream-deep">
         {/* première image du clip, sans le son : rien ne joue avant l'ouverture */}
         {c.kind === "gif" ? (
@@ -250,11 +254,17 @@ function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: (
 
 function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCancel, busy, onRender }: {
   clip: Clip; confirm: boolean; onClose: () => void; onTitle: (t: string) => void; onFavorite: () => void; onDelete: () => void; onCancel: () => void;
-  busy: boolean; onRender: (kind: "mp4" | "gif", span: Span) => void;
+  busy: boolean; onRender: (kind: "mp4" | "gif" | "vertical", span: Span, focus?: number) => void;
 }) {
   const [title, setTitle] = useState(c.title ?? "");
   const [failed, setFailed] = useState(false);
-  const [cutting, setCutting] = useState(false);
+  /** Couper, ou format vertical (cadre 9:16 à placer sur l'image). */
+  const [mode, setMode] = useState<"cut" | "vertical" | null>(null);
+  const [focus, setFocus] = useState(0.5);
+  const [sharing, setSharing] = useState(false);
+  /** Vidéo déjà verticale (ou carrée) : pas de format vertical à en tirer. */
+  const [portrait, setPortrait] = useState(false);
+  const cutting = mode !== null;
   const [length, setLength] = useState(c.duration ?? 0);
   const video = useRef<HTMLVideoElement>(null);
   const back = useRef<HTMLButtonElement>(null);
@@ -268,7 +278,10 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
           {src && c.kind === "gif" ? (
             <img src={src} alt="" className="mx-auto max-h-[60vh] object-contain" />
           ) : src && !failed ? (
-            <video ref={video} src={src} controls autoPlay playsInline onError={() => setFailed(true)} onLoadedMetadata={(e) => setLength(e.currentTarget.duration)} className="max-h-[60vh] w-full bg-black object-contain" />
+            <>
+              <video ref={video} src={src} controls={mode !== "vertical"} autoPlay playsInline draggable onDragStart={(e) => dragOut(e, c)} onError={() => setFailed(true)} onLoadedMetadata={(e) => { const v = e.currentTarget; setLength(v.duration); setPortrait(v.videoWidth > 0 && v.videoWidth * 16 <= v.videoHeight * 9 + 16); }} className="max-h-[60vh] w-full bg-black object-contain" />
+              {mode === "vertical" && <Vertical video={video} focus={focus} onFocus={setFocus} />}
+            </>
           ) : (
             <div className="grid aspect-video place-items-center text-[0.95rem] font-bold text-white/70">{src ? t("Lecture impossible.") : c.game ?? ""}</div>
           )}
@@ -286,7 +299,9 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
             onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
             className="h-11 min-w-0 flex-1 rounded-full bg-cream-deep px-5 text-[0.95rem] font-bold text-ink outline-none placeholder:text-ink-faint"
           />
-          {c.kind !== "gif" && <Button aria-pressed={cutting} variant={cutting ? "primary" : "soft"} onClick={() => setCutting((v) => !v)}>{t("Couper")}</Button>}
+          {c.kind !== "gif" && <Button aria-pressed={mode === "cut"} variant={mode === "cut" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "cut" ? null : "cut"))}>{t("Couper")}</Button>}
+          {c.kind !== "gif" && !portrait && <Button icon="phone" aria-pressed={mode === "vertical"} variant={mode === "vertical" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "vertical" ? null : "vertical"))}>{t("Vertical")}</Button>}
+          <Button variant="primary" icon="share" onClick={() => setSharing(true)}>{t("Partager")}</Button>
           <Button icon="star" filled={c.favorite} onClick={onFavorite} aria-pressed={c.favorite}>{c.favorite ? t("Retirer des favoris") : t("Ajouter aux favoris")}</Button>
           {confirm ? (
             <>
@@ -298,9 +313,12 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
             <Button icon="trash" onClick={onDelete}>{t("Supprimer")}</Button>
           )}
         </div>
-        {cutting && <Trim video={video} src={src} length={length} busy={busy} onRender={onRender} />}
+        {cutting && <Trim key={mode} video={video} src={src} length={length} busy={busy} vertical={mode === "vertical"} onRender={(kind, span) => onRender(kind, span, focus)} />}
         <div className="px-6 pb-4 text-[0.8rem] font-semibold text-ink-soft">{[c.game, when(c.at), size(c.size), c.auto ? autoLabel(c.auto) : null].filter(Boolean).join(" · ")}</div>
       </motion.div>
+      <AnimatePresence>
+        {sharing && <ShareSheet clip={c} onClose={() => setSharing(false)} onVertical={c.kind === "gif" || portrait ? null : () => { setSharing(false); setMode("vertical"); }} />}
+      </AnimatePresence>
     </motion.div>
   );
 }

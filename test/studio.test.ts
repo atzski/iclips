@@ -91,3 +91,25 @@ describe("instants de l'éditeur", () => {
     expect(instant(-1)).toMatch(/^0:00[.,]0$/);
   });
 });
+
+describe("partage", () => {
+  it("garde un lien qui vaut encore plus d'une heure", async () => {
+    const { liveLink } = await import("../ui/src/Share");
+    expect(liveLink({ link: "https://litter.catbox.moe/a.mp4", linkUntil: 10_000_000 }, 0)).toBe("https://litter.catbox.moe/a.mp4");
+    expect(liveLink({ link: "https://litter.catbox.moe/a.mp4", linkUntil: 10_000_000 }, 7_000_000)).toBeNull();
+    expect(liveLink({}, 0)).toBeNull();
+  });
+
+  it("place le cadre vertical dans l'image", async () => {
+    const { contentBox, frameLeft } = await import("../ui/src/Vertical");
+    const b = contentBox(1000, 600, 1920, 1080);
+    expect(b.x).toBeCloseTo(0);
+    expect(b.y).toBeCloseTo(18.75);
+    expect(b.w).toBeCloseTo(1000);
+    expect(b.h).toBeCloseTo(562.5);
+    const frame = (1080 * 9) / 16 / 1920;
+    expect(frameLeft(0.5, frame)).toBeCloseTo(0.5 - frame / 2);
+    expect(frameLeft(0, frame)).toBe(0);
+    expect(frameLeft(1, frame)).toBeCloseTo(1 - frame);
+  });
+});

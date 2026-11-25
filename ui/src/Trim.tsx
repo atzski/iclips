@@ -15,12 +15,14 @@ import { Button } from "./ui";
 const STEP = 0.2;
 const FRAMES = 12;
 
-export function Trim({ video, src, length, busy, onRender }: {
+export function Trim({ video, src, length, busy, vertical, onRender }: {
   video: RefObject<HTMLVideoElement | null>;
   src: string;
   length: number;
   busy: boolean;
-  onRender: (kind: "mp4" | "gif", span: Span) => void;
+  /** Format vertical : un seul bouton, « Créer en vertical ». */
+  vertical?: boolean;
+  onRender: (kind: "mp4" | "gif" | "vertical", span: Span) => void;
 }) {
   const [span, setSpan] = useState<Span>(() => clampSpan({ start: 0, end: length }, length));
   // tant que rien n'est tiré, le passage couvre tout le clip (sa durée arrive avec la vidéo)
@@ -107,8 +109,14 @@ export function Trim({ video, src, length, busy, onRender }: {
         </span>
         <span className="flex-1" />
         <Button variant="ghost" icon="play" onClick={playSpan}>{t("Lire le passage")}</Button>
-        <Button variant="primary" disabled={busy} onClick={() => onRender("mp4", span)}>{t("Créer le clip")}</Button>
-        <Button disabled={busy || gifTooLong} onClick={() => onRender("gif", span)}>{t("Créer un GIF")}</Button>
+        {vertical ? (
+          <Button variant="primary" icon="phone" disabled={busy} onClick={() => onRender("vertical", span)}>{t("Créer en vertical")}</Button>
+        ) : (
+          <>
+            <Button variant="primary" disabled={busy} onClick={() => onRender("mp4", span)}>{t("Créer le clip")}</Button>
+            <Button disabled={busy || gifTooLong} onClick={() => onRender("gif", span)}>{t("Créer un GIF")}</Button>
+          </>
+        )}
       </div>
 
       <div
@@ -142,7 +150,7 @@ export function Trim({ video, src, length, busy, onRender }: {
         <span className="absolute -translate-x-1/2" style={{ left: pct(span.end) }}>{instant(span.end)}</span>
       </div>
       <p className="text-[0.78rem] font-semibold text-ink-faint">
-        {gifTooLong ? t("Un GIF dure 10 secondes au plus : raccourcissez le passage.") : t("Faites glisser les poignées pour choisir le passage (à la manette : gauche et droite sur une poignée). Le clip commence sur l’image clé qui précède le début (une par seconde).")}
+        {vertical ? t("Faites glisser le cadre sur l’image pour choisir ce qui reste, et les poignées pour le passage. La vidéo est réencodée en 9:16, coupée à l’image près.") : gifTooLong ? t("Un GIF dure 10 secondes au plus : raccourcissez le passage.") : t("Faites glisser les poignées pour choisir le passage (à la manette : gauche et droite sur une poignée). Le clip commence sur l’image clé qui précède le début (une par seconde).")}
       </p>
     </div>
   );
