@@ -126,6 +126,13 @@ const EN: Record<string, string> = {
   "Micro utilisé": "Microphone used",
   "Par défaut de Windows": "Windows default",
   "Appareil débranché : celui par défaut est utilisé": "Device unplugged: the default one is used",
+  // mémoire des clips coupée
+  "Coupée : aucun clip ne peut être gardé pendant vos parties.": "Off: no clip can be kept during your games.",
+  "Pendant vos parties, iBox garde les dernières secondes pour en faire un clip.": "During your games, iBox keeps the last seconds to make a clip.",
+  "La mémoire des clips est coupée : aucun clip ne peut être gardé pendant vos parties.": "Clip memory is off: no clip can be kept during your games.",
+  "Rallumer": "Turn back on",
+  "La mémoire des clips est coupée : rallumez-la pour garder vos moments.": "Clip memory is off: turn it back on to keep your moments.",
+  "Rallumer la mémoire des clips": "Turn clip memory back on",
   // partage
   "Partager": "Share",
   "Partager le clip": "Share the clip",

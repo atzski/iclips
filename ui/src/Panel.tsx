@@ -95,7 +95,7 @@ export function Panel() {
 
   const seconds = status ? Math.min(status.seconds, status.max) : 0;
   const why = !status ? null
-    : !status.enabled ? t("Les clips sont désactivés dans Paramètres › Captures.")
+    : !status.enabled ? t("La mémoire des clips est coupée : rallumez-la pour garder vos moments.")
     : !status.game ? t("Les clips se gardent pendant une partie lancée depuis iBox.")
     : seconds === 0 ? t("La mémoire du clip se remplit…")
     : null;
@@ -161,6 +161,9 @@ export function Panel() {
                   {busy ? t("Enregistrement…") : seconds > 0 ? t("Garder les {0} dernières secondes", seconds) : t("Garder le clip")}
                 </Button>
                 {why && <p className="text-[0.85rem] font-semibold text-ink-soft">{why}</p>}
+                {status && !status.enabled && (
+                  <Button tone="green" icon="check" onClick={() => void host("capture.set", { enabled: true }).then(refresh).catch((e: Error) => setError(e.message))}>{t("Rallumer la mémoire des clips")}</Button>
+                )}
               </section>
             )}
 

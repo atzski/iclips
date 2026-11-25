@@ -51,6 +51,12 @@ export function Studio() {
   const [auto, setAuto] = useState(false);
   const [settings, setSettings] = useState(false);
   const [help, setHelp] = useState(false);
+  /** Mémoire des clips coupée : rien ne peut être gardé en partie (bandeau). */
+  const [memoryOff, setMemoryOff] = useState(false);
+  const checkMemory = useCallback(() => {
+    host<{ enabled: boolean }>("capture.get").then((c) => setMemoryOff(!c.enabled)).catch(() => undefined);
+  }, []);
+  useEffect(() => { if (!settings) checkMemory(); }, [settings, checkMemory]);
   /** Fiche Partager du lecteur (ici : Échap la ferme seule, pas le lecteur). */
   const [sharing, setSharing] = useState(false);
 
@@ -162,6 +168,17 @@ export function Studio() {
         <Button tone="blue" variant="ghost" title={hint(t("Raccourcis"), "?")} aria-label={t("Raccourcis")} onClick={() => setHelp(true)} className="px-4 font-extrabold">?</Button>
         <Button tone="red" variant="ghost" icon="x" onClick={() => void host("screen.close")}>{t("Fermer")}</Button>
       </header>
+
+      <AnimatePresence initial={false}>
+        {memoryOff && (
+          <motion.div role="alert" className="tone-red mx-8 mb-3 flex items-center gap-3 overflow-hidden rounded-xl bg-[color-mix(in_srgb,var(--tone)_14%,var(--ibox-white))] px-4 py-2.5 shadow-[inset_0_0_0_1.5px_color-mix(in_srgb,var(--tone)_35%,transparent)]"
+            initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0, transition: { duration: 0.16 } }} transition={SPRING.smooth}>
+            <Icon name="x" />
+            <span className="min-w-0 flex-1 text-[0.9rem] font-bold text-ink">{t("La mémoire des clips est coupée : aucun clip ne peut être gardé pendant vos parties.")}</span>
+            <Button tone="green" variant="primary" icon="check" onClick={() => void host("capture.set", { enabled: true }).then(checkMemory)}>{t("Rallumer")}</Button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {games.length > 1 && (
         <nav aria-label={t("Tous les jeux")} className="-mt-2 flex gap-2 overflow-x-auto px-8 pt-2 pb-3">

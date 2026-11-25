@@ -48,15 +48,18 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
         <header className="flex items-center gap-3">
           <Button ref={back} tone="blue" icon="back" variant="ghost" onClick={onClose} aria-label={t("Retour")} className="px-3" />
           <h2 className="flex-1 font-display text-[1.35rem] leading-tight text-ink">{t("Réglages")}</h2>
-          {s && (
-            <span className="flex items-center gap-3 text-[0.9rem] font-bold text-ink-soft">
-              {t("Mémoire des clips")}
-              <Switch label={t("Mémoire des clips")} on={s.enabled} onChange={(v) => set({ enabled: v })} />
-            </span>
-          )}
         </header>
 
         <Section tone="accent" icon="play" title={t("Capture")}>
+          <div className={`flex items-center gap-3 rounded-lg px-4 py-3 ${s && !s.enabled ? "tone-red bg-[color-mix(in_srgb,var(--tone)_14%,var(--ibox-white))]" : "bg-cream-deep/60"}`}>
+            <div className="min-w-0 flex-1">
+              <div className="text-[0.95rem] font-extrabold text-ink">{t("Mémoire des clips")}</div>
+              <div className="text-[0.82rem] font-semibold text-ink-soft">
+                {s && !s.enabled ? t("Coupée : aucun clip ne peut être gardé pendant vos parties.") : t("Pendant vos parties, iBox garde les dernières secondes pour en faire un clip.")}
+              </div>
+            </div>
+            {s && <Switch label={t("Mémoire des clips")} on={s.enabled} onChange={(v) => set({ enabled: v })} />}
+          </div>
           <Label text={t("Durée d’un clip")} hint={s ? t("Mémoire tenue en jeu : environ {0}", size(s.memory)) : ""} />
           <div className="flex flex-wrap gap-2">
             {SECONDS.map((n) => (
