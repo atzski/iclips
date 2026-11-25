@@ -27,6 +27,39 @@ pub fn pick(ui: &str, available: &[String]) -> Option<String> {
 #[cfg(windows)]
 pub use imp::languages;
 
+/// Journal de l'écoute (`logs/voix.log`) : moteur, micro, chaque son reconnu (score, durée) et la
+/// décision. Sans lui, un clip parti tout seul ou une phrase ignorée chez un joueur ne s'explique
+/// pas. Rien de ce qui est dit n'y est écrit (seulement la grammaire touchée), 64 Ko au plus.
+pub mod journal {
+    use std::io::Write;
+    use std::path::PathBuf;
+    use std::sync::Mutex;
+
+    static FILE: Mutex<Option<PathBuf>> = Mutex::new(None);
+    const MAX: u64 = 64 * 1024;
+
+    pub fn set_dir(dir: PathBuf) {
+        let _ = std::fs::create_dir_all(&dir);
+        if let Ok(mut f) = FILE.lock() {
+            *f = Some(dir.join("voix.log"));
+        }
+    }
+
+    pub fn write(line: &str) {
+        let Some(path) = FILE.lock().ok().and_then(|f| f.clone()) else { return };
+        // trop long : on garde la seconde moitié
+        if std::fs::metadata(&path).map(|m| m.len() > MAX).unwrap_or(false) {
+            if let Ok(old) = std::fs::read(&path) {
+                let _ = std::fs::write(&path, &old[old.len() / 2..]);
+            }
+        }
+        let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+            let _ = writeln!(f, "{at} {line}");
+        }
+    }
+}
+
 /// Écoute en cours : moteur récent (micro par défaut) ou classique (micro choisi).
 pub enum Listener {
     #[cfg(windows)]
@@ -49,13 +82,24 @@ impl Listener {
         if let Some(name) = mic.or(default_mic.as_deref()) {
             let h = on_heard.clone();
             match crate::voice_sapi::Listener::start(tag, phrases(tag), crate::voice_sapi::Input::Device(name.to_string()), move || h()) {
-                Ok(l) => return Ok(Listener::Chosen(l)),
-                Err(e) => eprintln!("iClips : « Clip ça ! » sur « {name} » impossible ({e}) : micro par défaut"),
+                Ok(l) => {
+                    journal::write(&format!("écoute : moteur classique, micro « {name} » ({}), langue {tag}", if mic.is_some() { "choisi dans iClips" } else { "par défaut" }));
+                    return Ok(Listener::Chosen(l));
+                }
+                Err(e) => {
+                    journal::write(&format!("écoute : moteur classique impossible sur « {name} » : {e}"));
+                    eprintln!("iClips : « Clip ça ! » sur « {name} » impossible ({e}) : micro par défaut");
+                }
             }
         }
         #[cfg(windows)]
         {
-            imp::Listener::start(tag, move || on_heard()).map(Listener::Default)
+            let r = imp::Listener::start(tag, move || on_heard()).map(Listener::Default);
+            match &r {
+                Ok(_) => journal::write(&format!("écoute : moteur récent de Windows, micro par défaut, langue {tag}")),
+                Err(e) => journal::write(&format!("écoute impossible : {e}")),
+            }
+            r
         }
         #[cfg(not(windows))]
         {
@@ -112,7 +156,7 @@ mod imp {
 
     fn message(e: &windows::core::Error) -> String {
         match e.code().0 as u32 {
-            0x8007_0005 => "Windows refuse le micro à iBox (Paramètres Windows › Confidentialité › Microphone : autoriser les applications de bureau).".into(),
+            0x8007_0005 => "Windows refuse le micro à iClips (Paramètres Windows › Confidentialité › Microphone : autoriser les applications de bureau).".into(),
             0x8004_503A | 0x8007_0490 => "Aucun micro n'est branché.".into(),
             c => format!("Reconnaissance vocale indisponible (0x{c:08X})."),
         }
@@ -172,8 +216,13 @@ mod imp {
                             let r = a.Result()?;
                             // « haute » seulement : en « moyenne », la musique et les dialogues d'un
                             // jeu passaient pour « Clip ça ! » (boucle de clips de la 1.0.10)
-                            let sure = matches!(r.Confidence()?, SpeechRecognitionConfidence::High);
-                            if r.Status()? == SpeechRecognitionResultStatus::Success && sure {
+                            let confidence = r.Confidence()?;
+                            let sure = matches!(confidence, SpeechRecognitionConfidence::High);
+                            let ok = r.Status()? == SpeechRecognitionResultStatus::Success && sure;
+                            let raw = r.RawConfidence().unwrap_or(0.0);
+                            let ms = r.PhraseDuration().map(|d| d.Duration / 10_000).unwrap_or(0);
+                            super::journal::write(&format!("entendu (moteur récent) : confiance {}, score {raw:.2}, {ms} ms, accepté {ok}", confidence.0));
+                            if ok {
                                 on_heard();
                             }
                         }
@@ -250,7 +299,9 @@ mod tests {
         check(&tag).expect("grammaire");
         println!("grammaire compilée pour {tag}");
         if std::env::var("IBOX_VOICE_LISTEN").is_ok() {
+            let t0 = std::time::Instant::now();
             let l = Listener::start(&tag, None, || println!("entendu")).expect("écoute");
+            println!("démarrée en {} ms, moteur classique : {}", t0.elapsed().as_millis(), l.on_chosen());
             std::thread::sleep(std::time::Duration::from_secs(2));
             assert!(l.alive());
         }

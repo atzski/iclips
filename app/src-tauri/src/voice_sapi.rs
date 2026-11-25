@@ -29,15 +29,37 @@ pub fn same_device(sapi: &str, endpoint: &str) -> bool {
 /// ce que le moteur entend (musique, sonneries, dialogues d'un jeu) sous « Clip ça ! » en
 /// confiance « normale », score 0,5 à 0,77 : la boucle de clips de la 1.0.10. Avec la dictée
 /// concurrente (`rival`), ces sons partent en dictée et la phrase dite au micro sort en « normale »
-/// (0,57 à 0,78 mesuré sur une vraie voix, 3 fois sur 5 ; les 2 autres en « faible », refusées,
-/// comme les phrases ordinaires qui tombent parfois sur la grammaire). Sans dictée (moteur qui ne
-/// la propose pas) : « haute » et score 0,8, seuil seul.
+/// (0,57 à 0,78 mesuré sur une vraie voix), acceptée aussitôt, ou en « faible » (0,45 et 0,46, la
+/// même voix) : une phrase ordinaire sur sept tombe aussi là (0,47, dialogue de jeu), donc une
+/// « faible » n'est acceptée que répétée (`faint`, deux en moins de 5 s : le joueur qui insiste).
+/// Sans dictée (moteur qui ne la propose pas) : « haute » et score 0,8, seuil seul.
 pub fn accepted(confidence: i8, engine: f32, rival: bool) -> bool {
     if rival {
         confidence >= 0
     } else {
         confidence >= 1 && engine >= 0.8
     }
+}
+
+/// « Faible » mais plausible : comptée pour la répétition (voir `accepted`).
+pub fn faint(confidence: i8, engine: f32, rival: bool) -> bool {
+    rival && confidence < 0 && engine >= 0.40
+}
+
+/// Deux « faibles » à moins de 5 s : la seconde est acceptée.
+pub const FAINT_PAIR_MS: u128 = 5_000;
+
+/// La dictée a-t-elle écrit la phrase ? Dite fort, au milieu du son d'un jeu, « Clip ça ! » part
+/// parfois en dictée (« clip ça », « clic ça », « clips ça », « clippe sa »…) au lieu de la grammaire.
+pub fn dictated(text: &str) -> bool {
+    let t: String = text.to_lowercase().chars().map(|c| if c.is_alphanumeric() || c == 'ç' { c } else { ' ' }).collect();
+    let words: Vec<&str> = t.split_whitespace().collect();
+    // au plus quatre mots : une phrase plus longue qui contient « clip ça » n'est pas la commande
+    words.len() <= 4
+        && words.windows(2).any(|w| {
+            matches!(w[0], "clip" | "clips" | "clippe" | "clipe" | "clic" | "clique" | "klip" | "click")
+                && matches!(w[1], "ça" | "sa" | "ca" | "cela" | "that" | "it")
+        })
 }
 
 /// Identifiant de la grammaire de dictée concurrente.
@@ -187,9 +209,7 @@ mod imp {
         // concurrente : la dictée libre (grammaire 1) absorbe ce qui n'est pas la phrase. Seule,
         // la grammaire de deux phrases range presque tout son entendu sous « Clip ça ! ».
         let free = ctx.CreateGrammar(super::DICTATION).ok().filter(|d| d.LoadDictation(PCWSTR::null(), SPLO_STATIC).is_ok() && d.SetDictationState(SPRS_ACTIVE).is_ok());
-        if free.is_none() {
-            eprintln!("iClips : dictée indisponible pour « Clip ça ! » : seuil seul");
-        }
+        crate::voice::journal::write(if free.is_some() { "dictée concurrente chargée" } else { "dictée indisponible : seuil seul" });
         rec.SetRecoState(SPRST_ACTIVE).map_err(e)?;
         Ok((rec, ctx, g, free))
     }
@@ -207,6 +227,7 @@ mod imp {
             }
         };
         let _ = ready.send(Ok(()));
+        let mut last_faint: Option<std::time::Instant> = None;
         'outer: while !stop.load(Ordering::Relaxed) {
             let _ = ctx.WaitForNotifyEvent(250);
             loop {
@@ -223,10 +244,25 @@ mod imp {
                         let confidence = (*phrase).Base.Rule.Confidence;
                         let engine = (*phrase).Base.Rule.SREngineConfidence;
                         let ours = (*phrase).Base.ullGrammarID != super::DICTATION;
+                        let ms = (*phrase).Base.ulAudioSizeTime / 10_000;
                         CoTaskMemFree(Some(phrase as *const _));
-                        let ok = ours && super::accepted(confidence, engine, free.is_some());
+                        // dictée : son texte peut être la phrase (dite au milieu du son d'un jeu)
+                        let said = if ours { false } else {
+                            let mut p = windows::core::PWSTR::null();
+                            result.GetText(u32::MAX, u32::MAX, true, &mut p, None).is_ok() && !p.is_null() && super::dictated(&text(p))
+                        };
+                        let mut ok = (ours && super::accepted(confidence, engine, free.is_some())) || said;
+                        if ours && !ok && super::faint(confidence, engine, free.is_some()) {
+                            ok = last_faint.is_some_and(|t: std::time::Instant| t.elapsed().as_millis() < super::FAINT_PAIR_MS);
+                            last_faint = if ok { None } else { Some(std::time::Instant::now()) };
+                        }
+                        // rien de ce qui est dit n'est écrit : seulement la grammaire touchée
+                        crate::voice::journal::write(&format!(
+                            "entendu : {}, confiance {confidence}, score {engine:.2}, {ms} ms, accepté {ok}",
+                            if ours { "la phrase" } else if said { "la phrase (en dictée)" } else { "autre chose (dictée)" }
+                        ));
                         if std::env::var_os("IBOX_VOICE_DEBUG").is_some() {
-                            println!("  reconnu : {}, confiance {confidence}, moteur {engine:.3}, accepté {ok}", if ours { "phrase" } else { "dictée" });
+                            println!("  reconnu : {}, confiance {confidence}, moteur {engine:.3}, {ms} ms, accepté {ok}", if ours { "phrase" } else if said { "dictée = phrase" } else { "dictée" });
                         }
                         if ok {
                             on_heard();
@@ -274,7 +310,15 @@ mod tests {
         assert_eq!(sapi_language("fr-FR")[0], "40C");
         assert_eq!(sapi_language("en-US")[0], "409");
         assert!(accepted(1, 0.90, false) && !accepted(0, 0.77, false) && !accepted(1, 0.6, false) && !accepted(-1, 0.9, false));
-        assert!(accepted(0, 0.6, true) && !accepted(-1, 0.9, true));
+        // avec la dictée : normale aussitôt ; faible dès 0,40 (vraie voix : 0,45) seulement répétée
+        assert!(accepted(0, 0.3, true) && !accepted(-1, 0.445, true));
+        assert!(faint(-1, 0.445, true) && !faint(-1, 0.376, true) && !faint(0, 0.6, true) && !faint(-1, 0.9, false));
+        for yes in ["Clip ça !", "clip sa", "Clic ça", "clips ça", "Clippe ça.", "ok clip ça"] {
+            assert!(dictated(yes), "{yes}");
+        }
+        for no in ["clip", "ça va", "regarde ce clip ça marche pas du tout", "un clip de ça et de ça", "attention ennemi"] {
+            assert!(!dictated(no), "{no}");
+        }
     }
 
     /// Moteur réel sur le micro (`IBOX_VOICE_MIC` : nom, sinon celui par défaut), pendant

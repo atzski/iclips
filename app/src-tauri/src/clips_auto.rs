@@ -313,6 +313,10 @@ fn voice_thread(app: &AppHandle) {
         return;
     }
     let app = app.clone();
+    // journal de l'écoute (logs/voix.log), comme dans iBox
+    if let Ok(dir) = app.path().app_log_dir() {
+        crate::voice::journal::set_dir(dir);
+    }
     std::thread::spawn(move || {
         let mut listener: Option<(voice::Listener, &'static str, Option<String>)> = None;
         loop {
