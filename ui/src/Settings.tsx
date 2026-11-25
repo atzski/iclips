@@ -3,14 +3,14 @@
  * dans iBox (Paramètres › Captures suit) : durée, qualité, son de Windows et micro avec leur
  * volume, pistes séparées ; raccourcis ; place prise sur le disque.
  */
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { SPRING } from "./ibox/motion";
 import { host, type CaptureSettings, type Quality } from "./host";
 import { size } from "./format";
 import { t } from "./i18n";
 import { Button, Pill, type IconName, type Tone } from "./ui";
-import { Slider, Switch } from "./controls";
+import { DevicePicker, Slider, Switch, type Device } from "./controls";
 import { groups, Kbd } from "./keys";
 
 const SECONDS = [15, 30, 60, 120];
@@ -76,10 +76,12 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
         </Section>
 
         <Section tone="orange" icon="sound" title={t("Son")}>
-          <Track label={t("Son de Windows")} hint={t("Le jeu, et tout ce que le PC joue")} on={!!s?.systemAudio} volume={s?.systemVolume ?? 1}
-            onToggle={(v) => set({ systemAudio: v })} onVolume={(v) => set({ systemVolume: v }, 300)} />
-          <Track label={t("Micro")} hint={t("Votre voix, par le micro par défaut de Windows")} on={!!s?.microphone} volume={s?.micVolume ?? 1}
-            onToggle={(v) => set({ microphone: v })} onVolume={(v) => set({ micVolume: v }, 300)} />
+          <Track label={t("Son de Windows")} hint={t("Le jeu, et tout ce que joue la sortie choisie (casque, haut-parleurs)")} on={!!s?.systemAudio} volume={s?.systemVolume ?? 1}
+            onToggle={(v) => set({ systemAudio: v })} onVolume={(v) => set({ systemVolume: v }, 300)}
+            devices={s?.outputs ?? []} device={s?.outputDevice} onDevice={(id) => set({ outputDevice: id })} deviceLabel={t("Sortie écoutée")} />
+          <Track label={t("Micro")} hint={t("Votre voix, par le micro choisi")} on={!!s?.microphone} volume={s?.micVolume ?? 1}
+            onToggle={(v) => set({ microphone: v })} onVolume={(v) => set({ micVolume: v }, 300)}
+            devices={s?.inputs ?? []} device={s?.micDevice} onDevice={(id) => set({ micDevice: id })} deviceLabel={t("Micro utilisé")} />
           <div className="flex items-center gap-3 rounded-lg bg-cream-deep/60 px-4 py-3">
             <div className="min-w-0 flex-1">
               <div className="text-[0.95rem] font-extrabold text-ink">{t("Pistes séparées")}</div>
@@ -135,7 +137,10 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   );
 }
 
-function Track({ label, hint, on, volume, onToggle, onVolume }: { label: string; hint: string; on: boolean; volume: number; onToggle: (v: boolean) => void; onVolume: (v: number) => void }) {
+function Track({ label, hint, on, volume, onToggle, onVolume, devices, device, onDevice, deviceLabel }: {
+  label: string; hint: string; on: boolean; volume: number; onToggle: (v: boolean) => void; onVolume: (v: number) => void;
+  devices: Device[]; device: string | null | undefined; onDevice: (id: string | null) => void; deviceLabel: string;
+}) {
   return (
     <div className="flex flex-col gap-2 rounded-lg bg-cream-deep/60 px-4 py-3">
       <div className="flex items-center gap-3">
@@ -145,7 +150,15 @@ function Track({ label, hint, on, volume, onToggle, onVolume }: { label: string;
         </div>
         <Switch label={label} on={on} onChange={onToggle} />
       </div>
-      {on && <Slider label={t("Volume : {0}", label)} value={volume} onChange={onVolume} />}
+      <AnimatePresence initial={false}>
+        {on && (
+          <motion.div className="flex flex-col gap-2" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0, transition: { duration: 0.16 } }} transition={{ height: SPRING.smooth, opacity: { duration: 0.18 } }}>
+            <DevicePicker label={deviceLabel} devices={devices} value={device} onChange={onDevice}
+              defaultLabel={t("Par défaut de Windows")} missingLabel={t("Appareil débranché : celui par défaut est utilisé")} />
+            <Slider label={t("Volume : {0}", label)} value={volume} onChange={onVolume} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

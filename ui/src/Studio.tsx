@@ -321,10 +321,11 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
   const [failed, setFailed] = useState(false);
   /** Couper, ou format vertical (cadre 9:16 à placer sur l'image). */
   const [mode, setMode] = useState<"cut" | "vertical" | "sound" | null>(null);
+  /** Outil déplié : le masque de l'animation tombe (les bulles dépassent du panneau). */
+  const [settled, setSettled] = useState(false);
   const [focus, setFocus] = useState(0.5);
   /** Vidéo déjà verticale (ou carrée) : pas de format vertical à en tirer. */
   const [portrait, setPortrait] = useState(false);
-  const cutting = mode === "cut" || mode === "vertical";
   const [length, setLength] = useState(c.duration ?? 0);
   const video = useRef<HTMLVideoElement>(null);
   const back = useRef<HTMLButtonElement>(null);
@@ -397,8 +398,21 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
             <Button tone="red" icon="trash" title={hint(t("Supprimer"), t("Suppr"))} onClick={onDelete}>{t("Supprimer")}</Button>
           )}
         </div>
-        {mode === "sound" && <SoundMix clip={c} video={video} busy={busy} onMix={onMix} />}
-        {cutting && <Trim key={mode} video={video} src={src} length={length} busy={busy} vertical={mode === "vertical"} onRender={(kind, span) => onRender(kind, span, focus)} />}
+        {/* outils du lecteur : ils se déplient et se replient sur un ressort */}
+        <AnimatePresence initial={false} mode="wait">
+          {mode && (
+            <motion.div key={mode} className={`border-t border-line ${settled ? "" : "overflow-hidden"}`}
+              onAnimationStart={() => setSettled(false)} onAnimationComplete={() => setSettled(true)}
+              initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0, transition: { duration: 0.16 } }}
+              transition={{ height: SPRING.smooth, opacity: { duration: 0.2 } }}>
+              {mode === "sound" ? (
+                <SoundMix clip={c} video={video} busy={busy} onMix={onMix} />
+              ) : (
+                <Trim video={video} src={src} length={length} busy={busy} vertical={mode === "vertical"} onRender={(kind, span) => onRender(kind, span, focus)} />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="flex items-center gap-3 px-6 pb-4 text-[0.8rem] font-semibold text-ink-soft">
           <span className="min-w-0 flex-1 truncate">{[c.game, when(c.at), size(c.size), c.auto ? autoLabel(c.auto) : null].filter(Boolean).join(" · ")}</span>
           <AnimatePresence>{note && <motion.span role="status" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={SPRING.snappy} className="font-bold text-accent-text">{note}</motion.span>}</AnimatePresence>

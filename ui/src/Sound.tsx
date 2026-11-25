@@ -3,11 +3,14 @@
  * séparées (Réglages › Pistes séparées), sinon un volume pour tout le son. iBox refait le son
  * dans un nouveau clip (`edit.render` `mix`) ; l'image ne change pas, l'original non plus.
  */
+import { motion } from "motion/react";
 import { useEffect, useState, type RefObject } from "react";
+import { SPRING } from "./ibox/motion";
 import type { Clip } from "./host";
 import { t } from "./i18n";
 import { Button } from "./ui";
-import { Slider } from "./controls";
+import { Bars, Slider } from "./controls";
+import { Pill, type IconName, type Tone } from "./ui";
 
 export function SoundMix({ clip: c, video, busy, onMix }: { clip: Clip; video: RefObject<HTMLVideoElement | null>; busy: boolean; onMix: (game: number, mic: number) => void }) {
   const tracks = c.tracks ?? [];
@@ -24,14 +27,14 @@ export function SoundMix({ clip: c, video, busy, onMix }: { clip: Clip; video: R
 
   const changed = game !== 1 || mic !== 1;
   return (
-    <div className="flex flex-col gap-3 border-t border-line px-6 py-4">
+    <div className="flex flex-col gap-3 px-6 py-4">
       {separate ? (
         <>
-          {tracks.includes("game") && <Row label={t("Son du jeu")} value={game} onChange={setGame} />}
-          {tracks.includes("mic") && <Row label={t("Micro")} value={mic} onChange={setMic} />}
+          {tracks.includes("game") && <Row tone="orange" icon="sound" label={t("Son du jeu")} value={game} onChange={setGame} />}
+          {tracks.includes("mic") && <Row tone="purple" icon="mic" label={t("Micro")} value={mic} onChange={setMic} />}
         </>
       ) : (
-        <Row label={t("Volume du clip")} value={game} onChange={setGame} />
+        <Row tone="orange" icon="sound" label={t("Volume du clip")} value={game} onChange={setGame} />
       )}
       <div className="flex flex-wrap items-center gap-3">
         <p className="min-w-0 flex-1 text-[0.78rem] font-semibold text-ink-faint">
@@ -46,11 +49,14 @@ export function SoundMix({ clip: c, video, busy, onMix }: { clip: Clip; video: R
   );
 }
 
-function Row({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function Row({ tone, icon, label, value, onChange }: { tone: Tone; icon: IconName; label: string; value: number; onChange: (v: number) => void }) {
   return (
-    <div className="flex items-center gap-4">
-      <span className="w-32 shrink-0 text-[0.92rem] font-extrabold text-ink">{label}</span>
+    <motion.div layout initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={SPRING.smooth}
+      className={`tone-${tone} ibox-tile flex items-center gap-4 rounded-lg px-4 py-2`}>
+      <Pill icon={icon} tone={tone} size="h-9 w-9" iconSize="1.1em" />
+      <span className="w-28 shrink-0 text-[0.92rem] font-extrabold text-ink">{label}</span>
+      <Bars level={value} />
       <div className="min-w-0 flex-1"><Slider label={label} value={value} onChange={onChange} /></div>
-    </div>
+    </motion.div>
   );
 }

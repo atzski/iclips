@@ -68,6 +68,11 @@ export interface CaptureSettings {
   bytes: number;
   /** Raccourci de l'overlay d'iBox (il ouvre le panneau d'iClips), null s'il est coupé. */
   overlayKeys?: string | null;
+  /** Sortie écoutée et micro choisis (null : ceux par défaut), appareils branchés. */
+  outputDevice?: string | null;
+  micDevice?: string | null;
+  outputs?: { id: string; name: string; default: boolean }[];
+  inputs?: { id: string; name: string; default: boolean }[];
 }
 
 /** Clips automatiques (permission `clips-auto`). */
@@ -90,7 +95,10 @@ let sample: Clip[] = [
   { name: "1763900000000-mario-kart-8-deluxe.mp4", game: "Mario Kart 8 Deluxe", platformId: "switch", at: Date.now() - 3 * 86_400_000, size: 31_000_000, title: null, favorite: false, src: "" },
 ];
 
-let capture: CaptureSettings = { enabled: true, quality: "high", seconds: 30, systemAudio: true, microphone: true, systemVolume: 1, micVolume: 0.8, tracks: true, memory: 52_000_000, count: 14, bytes: 312_000_000, overlayKeys: "Alt+X" };
+let capture: CaptureSettings = { enabled: true, quality: "high", seconds: 30, systemAudio: true, microphone: true, systemVolume: 1, micVolume: 0.8, tracks: true, memory: 52_000_000, count: 14, bytes: 312_000_000, overlayKeys: "Alt+X",
+  outputDevice: null, micDevice: null,
+  outputs: [{ id: "o1", name: "Casque (USB)", default: true }, { id: "o2", name: "Haut-parleurs (Realtek)", default: false }],
+  inputs: [{ id: "i1", name: "Micro du casque (USB)", default: true }, { id: "i2", name: "Micro de bureau (USB)", default: false }] };
 let auto: AutoStatus = { voice: false, pad: true, end: false, listening: false, language: "fr-FR", error: null };
 
 function preview(call: string, arg: Record<string, unknown>): unknown {

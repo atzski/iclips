@@ -119,6 +119,13 @@ const EN: Record<string, string> = {
   "Raccourci de l’overlay d’iBox ou Vue + X : ouvrir et fermer · C : garder la capture": "iBox overlay shortcut or View + X: open and close · C: keep the screenshot",
   "Le raccourci de l’overlay est coupé dans iBox (Paramètres › Système).": "The overlay shortcut is off in iBox (Settings › System).",
   "Il se change dans iBox, Paramètres › Système. Touche ? : tous les raccourcis du Studio.": "Change it in iBox, Settings › System. Key ?: all the Studio shortcuts.",
+  // 0.7 : appareils de son
+  "Le jeu, et tout ce que joue la sortie choisie (casque, haut-parleurs)": "The game, and everything the chosen output plays (headset, speakers)",
+  "Votre voix, par le micro choisi": "Your voice, through the chosen microphone",
+  "Sortie écoutée": "Recorded output",
+  "Micro utilisé": "Microphone used",
+  "Par défaut de Windows": "Windows default",
+  "Appareil débranché : celui par défaut est utilisé": "Device unplugged: the default one is used",
   // partage
   "Partager": "Share",
   "Partager le clip": "Share the clip",
@@ -177,6 +184,7 @@ const EN: Record<string, string> = {
   "Gardé à la manette": "Kept with the controller",
   "Gardé en fin de partie": "Kept when the game ended",
   "Passage : {0} à {1} ({2})": "Passage: {0} to {1} ({2})",
+  "Passage : {0} à {1}": "Passage: {0} to {1}",
   "Début du passage": "Start of the passage",
   "Fin du passage": "End of the passage",
   "Lire le passage": "Play the passage",
