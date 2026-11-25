@@ -88,6 +88,8 @@ export interface AutoStatus {
   error: string | null;
   /** Micro écouté : celui choisi dans les Réglages, null : celui par défaut de Windows. */
   mic?: string | null;
+  /** Voix sourde un instant : un clip joue avec le son (`auto.pause`, iBox 1.0.9). */
+  paused?: boolean;
 }
 
 /** Réglages de l'app autonome (`app.get`, `app.set`) : sans iBox, l'app les garde elle-même. */
@@ -181,6 +183,7 @@ function preview(call: string, arg: Record<string, unknown>): unknown {
     auto = { ...auto, ...(arg as Partial<AutoStatus>) };
     return auto;
   }
+  if (call === "auto.pause") return { ...auto, paused: Number(arg.ms) > 0 };
   if (call === "auto.test") {
     // aperçu : la phrase est « entendue » au bout de deux secondes
     setTimeout(() => window.dispatchEvent(new CustomEvent("ibox:host", { detail: { event: "voice://heard", payload: null } })), 2000);

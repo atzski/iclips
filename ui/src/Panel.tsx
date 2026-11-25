@@ -12,6 +12,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { clipUrl, host, onHost, shotUrl, standalone, type ClipStatus } from "./host";
 import { playClip } from "./shutter";
+import { useQuietVoice } from "./quiet";
 import { useKeys } from "./keys";
 import { t } from "./i18n";
 import { SPRING } from "./ibox/motion";
@@ -35,6 +36,9 @@ export function Panel() {
   const [saved, setSaved] = useState<Saved | null>(null);
   const [error, setError] = useState<string | null>(null);
   const keep = useRef<HTMLButtonElement>(null);
+  /** Aperçu du clip gardé : s'il jouait avec le son, « Clip ça ! » se tairait (quiet.ts). */
+  const preview = useRef<HTMLVideoElement>(null);
+  useQuietVoice(preview, saved?.name);
   /** Ouverture en cours (l'image figée change à chaque fois). */
   const [stamp, setStamp] = useState(() => Date.now());
   const [shotKept, setShotKept] = useState(false);
@@ -138,7 +142,7 @@ export function Panel() {
                 <div className="flex items-center gap-2 text-[0.95rem] font-bold text-accent-text"><Icon name="check" /> {t("Clip gardé")}</div>
                 {clipUrl(saved) && (
                   // aperçu sans le son, en boucle : rien ne se superpose au jeu
-                  <video src={clipUrl(saved)} muted autoPlay loop playsInline className="aspect-video w-full rounded-lg bg-black object-cover" />
+                  <video ref={preview} src={clipUrl(saved)} muted autoPlay loop playsInline className="aspect-video w-full rounded-lg bg-black object-cover" />
                 )}
                 <input
                   data-nav

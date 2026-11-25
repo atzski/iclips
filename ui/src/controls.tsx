@@ -20,7 +20,7 @@ const HELD = { type: "spring", stiffness: 900, damping: 55, mass: 0.5 } as const
  * bouton grossit sous le doigt et une bulle donne la valeur. Gauche et droite au clavier ou à la
  * manette : par 5 %.
  */
-export function Slider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+export function Slider({ label, value, onChange, disabled }: { label: string; value: number; onChange: (v: number) => void; disabled?: boolean }) {
   const track = useRef<HTMLDivElement>(null);
   const current = useRef(value);
   current.current = value;
@@ -52,9 +52,10 @@ export function Slider({ label, value, onChange }: { label: string; value: numbe
       <div
         ref={track}
         role="slider"
-        tabIndex={0}
-        data-nav
+        tabIndex={disabled ? -1 : 0}
+        data-nav={disabled ? undefined : true}
         data-adjust
+        aria-disabled={disabled || undefined}
         aria-label={label}
         aria-valuemin={0}
         aria-valuemax={200}
@@ -68,7 +69,7 @@ export function Slider({ label, value, onChange }: { label: string; value: numbe
         onPointerLeave={() => setNear(false)}
         onFocus={() => setFocus(true)}
         onBlur={() => setFocus(false)}
-        className="group relative h-8 min-w-0 flex-1 cursor-pointer touch-none rounded-full outline-none"
+        className={`group relative h-8 min-w-0 flex-1 touch-none rounded-full outline-none ${disabled ? "pointer-events-none" : "cursor-pointer"}`}
       >
         {/* piste, remplissage en dégradé, repère « tel quel » au milieu */}
         <motion.div className="absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-hidden rounded-full bg-[color-mix(in_srgb,var(--tone,var(--accent))_16%,var(--ibox-cream-deep))]"

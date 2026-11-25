@@ -16,10 +16,12 @@ import { dragOut, ShareSheet } from "./Share";
 import { Vertical } from "./Vertical";
 import { SettingsSheet } from "./Settings";
 import { SoundMix } from "./Sound";
+import { ClipMenu } from "./Menu";
+import { useQuietVoice } from "./quiet";
 import { hint, KeysSheet, useKeys } from "./keys";
 import { duration, size, when } from "./format";
 import { t } from "./i18n";
-import { useNav } from "./nav";
+import { openMenu, useNav } from "./nav";
 import { Button, Icon, type Tone } from "./ui";
 import logo from "./logo.png";
 
@@ -49,7 +51,12 @@ export function Studio() {
   /** Assemblage : clips choisis, dans l'ordre (null : pas en cours). */
   const [picked, setPicked] = useState<string[] | null>(null);
   const [auto, setAuto] = useState(false);
-  const [settings, setSettings] = useState(false);
+  const [settings, setSettings] = useState<false | "all" | "sound">(false);
+  /** Menu d'un clip (clic droit, touche Menu, Y) : où l'ouvrir, et la carte qui rend le focus. */
+  const [menu, setMenu] = useState<{ name: string; x: number; y: number; from: HTMLElement } | null>(null);
+  const closeMenu = useCallback(() => setMenu((m) => { m?.from.focus(); return null; }), []);
+  /** Outil ouvert d'office dans le lecteur (« Modifier le clip » : le montage). */
+  const [startMode, setStartMode] = useState<"cut" | null>(null);
   const [help, setHelp] = useState(false);
   /** Mémoire des clips coupée : rien ne peut être gardé en partie (bandeau). */
   const [memoryOff, setMemoryOff] = useState(false);
@@ -110,18 +117,19 @@ export function Studio() {
   };
 
   // galerie : 1 à 4 (filtres), Ctrl+A (assembler), A (automatique), R (réglages) ; ? partout
-  useKeys(!open && !auto && !settings && !help, (k) => {
+  useKeys(!open && !auto && !settings && !help && !menu, (k) => {
     const n = Number(k);
     if (n >= 1 && n <= FILTERS.length) { setFilter(FILTERS[n - 1]); return true; }
     if (k === "ctrl+a") { setPicked((p) => (p ? null : [])); return true; }
     if (k === "a") { setAuto(true); return true; }
-    if (k === "r") { setSettings(true); return true; }
+    if (k === "r") { setSettings("all"); return true; }
     return false;
   });
   useKeys(!help, (k) => (k === "?" ? (setHelp(true), true) : false));
 
   useNav(() => {
-    if (help) setHelp(false);
+    if (menu) closeMenu();
+    else if (help) setHelp(false);
     else if (settings) setSettings(false);
     else if (auto) setAuto(false);
     else if (sharing) setSharing(false);
@@ -164,7 +172,7 @@ export function Studio() {
         </div>
         <Button tone="orange" icon="copy" title={hint(t("Assembler"), "Ctrl+A")} variant={picked ? "primary" : "soft"} aria-pressed={!!picked} onClick={() => setPicked((p) => (p ? null : []))}>{t("Assembler")}</Button>
         <Button tone="teal" icon="auto" title={hint(t("Automatique"), "A")} onClick={() => setAuto(true)}>{t("Automatique")}</Button>
-        <Button tone="orange" icon="gear" title={hint(t("Réglages"), "R")} onClick={() => setSettings(true)}>{t("Réglages")}</Button>
+        <Button tone="orange" icon="gear" title={hint(t("Réglages"), "R")} onClick={() => setSettings("all")}>{t("Réglages")}</Button>
         <Button tone="blue" variant="ghost" title={hint(t("Raccourcis"), "?")} aria-label={t("Raccourcis")} onClick={() => setHelp(true)} className="px-4 font-extrabold">?</Button>
         <Button tone="red" variant="ghost" icon="x" onClick={() => void host("screen.close")}>{t("Fermer")}</Button>
       </header>
@@ -209,7 +217,8 @@ export function Studio() {
                 <Card
                   clip={c}
                   order={picked ? picked.indexOf(c.name) + 1 : 0}
-                  onOpen={() => (picked ? !isImage(c) && setPicked((p) => p && (p.includes(c.name) ? p.filter((n) => n !== c.name) : [...p, c.name])) : setOpen(c.name))}
+                  onOpen={() => (picked ? !isImage(c) && setPicked((p) => p && (p.includes(c.name) ? p.filter((n) => n !== c.name) : [...p, c.name])) : (setStartMode(null), setOpen(c.name)))}
+                  onMenu={(x, y, from) => setMenu({ name: c.name, x, y, from })}
                 />
               </motion.li>
             ))}
@@ -224,7 +233,9 @@ export function Studio() {
             key={current.name}
             clip={current}
             confirm={confirm}
-            onClose={() => { setConfirm(false); setSharing(false); setOpen(null); }}
+            startMode={startMode}
+            onSettings={() => setSettings("sound")}
+            onClose={() => { setConfirm(false); setSharing(false); setStartMode(null); setOpen(null); }}
             sharing={sharing}
             setSharing={setSharing}
             onTitle={(title) => void act("clips.update", { name: current.name, title })}
@@ -240,7 +251,7 @@ export function Studio() {
       </AnimatePresence>
 
       <AnimatePresence>{auto && <AutoSheet onClose={() => setAuto(false)} />}</AnimatePresence>
-      <AnimatePresence>{settings && <SettingsSheet onClose={() => setSettings(false)} />}</AnimatePresence>
+      <AnimatePresence>{settings && <SettingsSheet focus={settings === "sound" ? "sound" : undefined} onClose={() => setSettings(false)} />}</AnimatePresence>
       <AnimatePresence>{help && <KeysSheet onClose={() => setHelp(false)} />}</AnimatePresence>
 
       <AnimatePresence>
@@ -271,6 +282,24 @@ export function Studio() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* menu d'un clip : dernier de la page, il garde la navigation pour lui (nav.ts) */}
+      <AnimatePresence>
+        {menu && (() => {
+          const c = clips?.find((x) => x.name === menu.name);
+          return c && (
+            <ClipMenu
+              key={menu.name}
+              clip={c}
+              at={menu}
+              onClose={closeMenu}
+              onOpen={() => { setMenu(null); setStartMode(null); setOpen(c.name); }}
+              onEdit={() => { setMenu(null); setStartMode("cut"); setOpen(c.name); }}
+              onDelete={() => { setMenu(null); void act("clips.delete", { name: c.name }); }}
+            />
+          );
+        })()}
+      </AnimatePresence>
     </div>
   );
 }
@@ -288,12 +317,25 @@ function autoLabel(how: NonNullable<Clip["auto"]>) {
   return how === "voice" ? t("Gardé à la voix") : how === "pad" ? t("Gardé à la manette") : t("Gardé en fin de partie");
 }
 
-function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: () => void }) {
+function Card({ clip: c, order, onOpen, onMenu }: { clip: Clip; order: number; onOpen: () => void; onMenu: (x: number, y: number, from: HTMLElement) => void }) {
   const [length, setLength] = useState(c.duration ?? 0);
   const src = clipUrl(c);
   const thumb = thumbUrl(c);
   return (
-    <button type="button" data-nav data-card draggable onDragStart={(e) => dragOut(e, c)} onClick={onOpen}
+    <button type="button" data-nav data-card draggable aria-haspopup="menu" onDragStart={(e) => dragOut(e, c)} onClick={onOpen}
+      onContextMenu={(e) => {
+        // clic droit : au pointeur ; touche Menu, Maj+F10 ou manette (Y, Menu) : au centre de la carte
+        e.preventDefault();
+        const el = e.currentTarget;
+        const r = el.getBoundingClientRect();
+        const pointer = e.button === 2 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+        el.focus();
+        onMenu(pointer ? e.clientX : r.left + r.width / 2, pointer ? e.clientY : r.top + r.height / 2, el);
+      }}
+      onKeyDown={(e) => {
+        // touche Menu ou Maj+F10 : Windows ne l'envoie pas toujours comme un clic droit
+        if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) { e.preventDefault(); openMenu(e.currentTarget); }
+      }}
       className={`tone-${kindTone(c)} ibox-tile group block w-full overflow-hidden rounded-xl text-left`}>
       <div className="relative aspect-video bg-cream-deep">
         {/* première image du clip, sans le son : rien ne joue avant l'ouverture */}
@@ -330,14 +372,15 @@ function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: (
   );
 }
 
-function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCancel, busy, keys, sharing, setSharing, onRender, onMix }: {
+function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCancel, busy, keys, sharing, setSharing, onRender, onMix, startMode, onSettings }: {
+  startMode: "cut" | null; onSettings: () => void;
   clip: Clip; confirm: boolean; onClose: () => void; onTitle: (t: string) => void; onFavorite: () => void; onDelete: () => void; onCancel: () => void;
   busy: boolean; keys: boolean; sharing: boolean; setSharing: (v: boolean) => void; onRender: (kind: "mp4" | "gif" | "vertical", span: Span, focus?: number) => void; onMix: (game: number, mic: number) => void;
 }) {
   const [title, setTitle] = useState(c.title ?? "");
   const [failed, setFailed] = useState(false);
   /** Couper, ou format vertical (cadre 9:16 à placer sur l'image). */
-  const [mode, setMode] = useState<"cut" | "vertical" | "sound" | null>(null);
+  const [mode, setMode] = useState<"cut" | "vertical" | "sound" | null>(isImage(c) ? null : startMode);
   /** Outil déplié : le masque de l'animation tombe (les bulles dépassent du panneau). */
   const [settled, setSettled] = useState(false);
   const [focus, setFocus] = useState(0.5);
@@ -345,6 +388,8 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
   const [portrait, setPortrait] = useState(false);
   const [length, setLength] = useState(c.duration ?? 0);
   const video = useRef<HTMLVideoElement>(null);
+  // le son du clip rejoué ne doit pas déclencher « Clip ça ! » (quiet.ts)
+  useQuietVoice(video, failed);
   const back = useRef<HTMLButtonElement>(null);
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => { if (!note) return; const id = setTimeout(() => setNote(null), 3000); return () => clearTimeout(id); }, [note]);
@@ -423,7 +468,7 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
               initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0, transition: { duration: 0.16 } }}
               transition={{ height: SPRING.smooth, opacity: { duration: 0.2 } }}>
               {mode === "sound" ? (
-                <SoundMix clip={c} video={video} busy={busy} onMix={onMix} />
+                <SoundMix clip={c} video={video} busy={busy} onMix={onMix} onSettings={onSettings} />
               ) : (
                 <Trim video={video} src={src} length={length} busy={busy} vertical={mode === "vertical"} onRender={(kind, span) => onRender(kind, span, focus)} />
               )}

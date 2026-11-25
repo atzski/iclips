@@ -2,6 +2,7 @@
  * Navigation au clavier et à la manette, comme dans iBox : flèches ou croix et stick gauche
  * pour aller d'un élément `[data-nav]` à son voisin, Entrée ou A pour valider, Échap ou B
  * pour revenir. La fenêtre du Studio a le focus : la Gamepad API du navigateur suffit.
+ * Y ou Menu (0.7.1) ouvrent le menu de l'élément choisi, comme un clic droit.
  */
 import { useEffect, useRef } from "react";
 
@@ -46,6 +47,13 @@ export function move(dir: Dir): void {
   if (i >= 0) { others[i].focus(); others[i].scrollIntoView({ block: "nearest", behavior: "smooth" }); }
 }
 
+/** Menu de l'élément choisi (manette : Y ou Menu) : un clic droit au centre de l'élément. */
+export function openMenu(el: Element | null = document.activeElement): void {
+  if (!(el instanceof HTMLElement) || !el.hasAttribute("data-nav")) return;
+  const r = el.getBoundingClientRect();
+  el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 0, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+}
+
 const KEYS: Record<string, Dir> = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
 
 /** Panneau en jeu : la manette arrive du socle (XInput natif, événement `pad`). */
@@ -66,7 +74,7 @@ export function useNav(onBack: () => void): void {
       else if (e.key === "Escape") { e.preventDefault(); back.current(); }
     };
     window.addEventListener("keydown", onKey);
-    // manette : croix, stick gauche (répétition après 380 ms, puis toutes les 120 ms), A, B
+    // manette : croix, stick gauche (répétition après 380 ms, puis toutes les 120 ms), A, B, Y et Menu
     let raf = 0, held: string | null = null, next = 0;
     const pressed = new Set<string>();
     const loop = (now: number) => {
@@ -77,11 +85,12 @@ export function useNav(onBack: () => void): void {
         const dir: Dir | null = b(12) || ay < -0.6 ? "up" : b(13) || ay > 0.6 ? "down" : b(14) || ax < -0.6 ? "left" : b(15) || ax > 0.6 ? "right" : null;
         if (dir !== held) { held = dir; if (dir) { move(dir); next = now + 380; } }
         else if (dir && now >= next) { move(dir); next = now + 120; }
-        for (const [i, act] of [[0, "a"], [1, "b"]] as const) {
+        for (const [i, act] of [[0, "a"], [1, "b"], [3, "y"], [9, "menu"]] as const) {
           if (b(i) && !pressed.has(act)) {
             pressed.add(act);
             if (act === "a") (document.activeElement as HTMLElement | null)?.click();
-            else back.current();
+            else if (act === "b") back.current();
+            else openMenu();
           } else if (!b(i)) pressed.delete(act);
         }
       }

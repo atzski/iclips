@@ -9,8 +9,8 @@ import { SPRING } from "./ibox/motion";
 import { host, standalone, type AppSettings, type CaptureSettings, type Quality } from "./host";
 import { size } from "./format";
 import { t } from "./i18n";
-import { Button, Pill, type IconName, type Tone } from "./ui";
-import { DevicePicker, Slider, Switch, type Device } from "./controls";
+import { Button, Icon, Pill, type IconName, type Tone } from "./ui";
+import { Bars, DevicePicker, Slider, Switch, type Device } from "./controls";
 import { groups, Kbd } from "./keys";
 
 const SECONDS = [15, 30, 60, 120];
@@ -21,24 +21,54 @@ const QUALITIES: { value: Quality; label: string; hint: string }[] = [
   { value: "max", label: "Maximale", hint: "1440p · 60 i/s" },
 ];
 
-export function SettingsSheet({ onClose }: { onClose: () => void }) {
+/** `focus` : « sound » ouvre les réglages sur la section Son (lien du lecteur). */
+export function SettingsSheet({ onClose, focus }: { onClose: () => void; focus?: "sound" }) {
   const [s, setS] = useState<CaptureSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const back = useRef<HTMLButtonElement>(null);
   const timer = useRef<number | undefined>(undefined);
+  /** Changements pas encore envoyés : ils partent ensemble (un volume suivi d'un autre réglage ne se perd plus). */
+  const pending = useRef<Partial<CaptureSettings>>({});
+  /** Volume que iBox vient de prendre (« Appliqué aux prochains clips »). */
+  const [saved, setSaved] = useState<"systemVolume" | "micVolume" | null>(null);
+  const savedTimer = useRef<number | undefined>(undefined);
+  const loaded = !!s;
 
   useEffect(() => {
     back.current?.focus();
     host<CaptureSettings>("capture.get").then(setS).catch((e: Error) => setError(e.message));
   }, []);
+  // ouvert depuis le lecteur : la section Son arrive à l'écran, son premier réglage prend le focus
+  useEffect(() => {
+    if (focus !== "sound" || !loaded) return;
+    const id = window.setTimeout(() => {
+      const sec = document.getElementById("iclips-sound");
+      sec?.scrollIntoView({ block: "start", behavior: "smooth" });
+      (sec?.querySelector<HTMLElement>("[data-track] [role=slider][data-nav]") ?? sec?.querySelector<HTMLElement>("[data-track] [role=switch]"))?.focus({ preventScroll: true });
+    }, 220);
+    return () => window.clearTimeout(id);
+  }, [focus, loaded]);
+  useEffect(() => () => window.clearTimeout(savedTimer.current), []);
 
   // tout de suite à l'écran, envoyé à iBox après un court temps (glissières)
   const set = (patch: Partial<CaptureSettings>, wait = 0) => {
     if (!s) return;
-    setS({ ...s, ...patch });
+    setS((cur) => (cur ? { ...cur, ...patch } : cur));
+    pending.current = { ...pending.current, ...patch };
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
-      host<CaptureSettings>("capture.set", patch).then((r) => setS((cur) => (cur ? { ...r, systemVolume: cur.systemVolume, micVolume: cur.micVolume } : r))).catch((e: Error) => setError(e.message));
+      const sent = pending.current;
+      pending.current = {};
+      host<CaptureSettings>("capture.set", sent).then((r) => {
+        // un curseur encore tenu garde sa valeur à l'écran
+        setS((cur) => (cur ? { ...r, systemVolume: pending.current.systemVolume ?? r.systemVolume, micVolume: pending.current.micVolume ?? r.micVolume } : r));
+        const key = sent.micVolume !== undefined ? "micVolume" : sent.systemVolume !== undefined ? "systemVolume" : null;
+        if (key) {
+          setSaved(key);
+          window.clearTimeout(savedTimer.current);
+          savedTimer.current = window.setTimeout(() => setSaved(null), 2400);
+        }
+      }).catch((e: Error) => setError(e.message));
     }, wait);
   };
 
@@ -85,11 +115,14 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
           </div>
         </Section>
 
-        <Section tone="orange" icon="sound" title={t("Son")}>
-          <Track label={t("Son de Windows")} hint={t("Le jeu, et tout ce que joue la sortie choisie (casque, haut-parleurs)")} on={!!s?.systemAudio} volume={s?.systemVolume ?? 1}
+        <Section id="iclips-sound" tone="orange" icon="sound" title={t("Son")}>
+          <p className="-mt-1 text-[0.82rem] font-semibold text-ink-soft">{t("Les volumes valent pour les prochains clips. Pour un clip déjà gardé : ouvrez-le, puis Son.")}</p>
+          <Track icon="sound" tone="orange" label={t("Son de Windows")} hint={t("Le jeu, et tout ce que joue la sortie choisie (casque, haut-parleurs)")} volumeLabel={t("Volume du son de Windows")}
+            off={t("Son de Windows coupé : vos clips n’en gardent rien.")} on={!!s?.systemAudio} volume={s?.systemVolume ?? 1} saved={saved === "systemVolume"}
             onToggle={(v) => set({ systemAudio: v })} onVolume={(v) => set({ systemVolume: v }, 300)}
             devices={s?.outputs ?? []} device={s?.outputDevice} onDevice={(id) => set({ outputDevice: id })} deviceLabel={t("Sortie écoutée")} />
-          <Track label={t("Micro")} hint={t("Votre voix, par le micro choisi")} on={!!s?.microphone} volume={s?.micVolume ?? 1}
+          <Track icon="mic" tone="purple" label={t("Micro")} hint={t("Votre voix, par le micro choisi")} volumeLabel={t("Volume du micro")}
+            off={t("Micro coupé : votre voix n’est pas dans vos clips. Allumez-le pour régler son volume.")} on={!!s?.microphone} volume={s?.micVolume ?? 1} saved={saved === "micVolume"}
             onToggle={(v) => set({ microphone: v })} onVolume={(v) => set({ micVolume: v }, 300)}
             devices={s?.inputs ?? []} device={s?.micDevice} onDevice={(id) => set({ micDevice: id })} deviceLabel={t("Micro utilisé")} />
           <div className="flex items-center gap-3 rounded-lg bg-cream-deep/60 px-4 py-3">
@@ -122,9 +155,9 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-function Section({ tone, icon, title, children }: { tone: Tone; icon: IconName; title: string; children: React.ReactNode }) {
+function Section({ id, tone, icon, title, children }: { id?: string; tone: Tone; icon: IconName; title: string; children: React.ReactNode }) {
   return (
-    <section className={`tone-${tone} flex flex-col gap-3 rounded-xl border-l-4 border-[var(--tone)] bg-[color-mix(in_srgb,var(--tone)_5%,transparent)] py-3 pr-1 pl-4`}>
+    <section id={id} className={`tone-${tone} flex flex-col gap-3 rounded-xl border-l-4 border-[var(--tone)] bg-[color-mix(in_srgb,var(--tone)_5%,transparent)] py-3 pr-1 pl-4`}>
       <h3 className="flex items-center gap-2.5 text-[0.8rem] font-extrabold tracking-[0.14em] text-[var(--tone-ink)] uppercase"><Pill icon={icon} tone={tone} size="h-8 w-8" iconSize="1.05em" />{title}</h3>
       {children}
     </section>
@@ -149,25 +182,47 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
   );
 }
 
-function Track({ label, hint, on, volume, onToggle, onVolume, devices, device, onDevice, deviceLabel }: {
-  label: string; hint: string; on: boolean; volume: number; onToggle: (v: boolean) => void; onVolume: (v: number) => void;
+/**
+ * Une source de son des clips (0.7.1) : l'interrupteur, puis son volume, toujours visible (grisé
+ * quand la source est coupée), et l'appareil. « Appliqué » s'affiche quand iBox a pris le réglage.
+ */
+function Track({ icon, tone, label, hint, volumeLabel, off, on, volume, saved, onToggle, onVolume, devices, device, onDevice, deviceLabel }: {
+  icon: IconName; tone: Tone; label: string; hint: string; volumeLabel: string; off: string; on: boolean; volume: number; saved: boolean;
+  onToggle: (v: boolean) => void; onVolume: (v: number) => void;
   devices: Device[]; device: string | null | undefined; onDevice: (id: string | null) => void; deviceLabel: string;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg bg-cream-deep/60 px-4 py-3">
+    <div data-track className={`tone-${tone} flex flex-col gap-2.5 rounded-lg bg-cream-deep/60 px-4 py-3`}>
       <div className="flex items-center gap-3">
+        <Pill icon={icon} tone={tone} size="h-10 w-10" iconSize="1.15em" />
         <div className="min-w-0 flex-1">
           <div className="text-[0.95rem] font-extrabold text-ink">{label}</div>
           <div className="text-[0.82rem] font-semibold text-ink-soft">{hint}</div>
         </div>
         <Switch label={label} on={on} onChange={onToggle} />
       </div>
+      <div className={`flex flex-col gap-1 rounded-lg bg-[var(--ibox-white)]/70 px-3 py-2 transition-opacity duration-200 ${on ? "" : "opacity-55"}`}>
+        <div className="flex items-center gap-2.5">
+          <span className="text-[0.88rem] font-extrabold text-ink">{volumeLabel}</span>
+          <Bars level={volume} active={on} />
+          <span className="min-w-0 flex-1" />
+          <AnimatePresence>
+            {saved && (
+              <motion.span role="status" className="inline-flex items-center gap-1 text-[0.78rem] font-extrabold text-[var(--tone-ink)]"
+                initial={{ opacity: 0, scale: 0.7, x: 6 }} animate={{ opacity: 1, scale: 1, x: 0 }} exit={{ opacity: 0, transition: { duration: 0.2 } }} transition={SPRING.pop}>
+                <Icon name="check" size="1.05em" />{t("Appliqué aux prochains clips")}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
+        <Slider label={volumeLabel} value={volume} onChange={onVolume} disabled={!on} />
+        {!on && <p className="text-[0.78rem] font-semibold text-ink-faint">{off}</p>}
+      </div>
       <AnimatePresence initial={false}>
         {on && (
           <motion.div className="flex flex-col gap-2" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0, transition: { duration: 0.16 } }} transition={{ height: SPRING.smooth, opacity: { duration: 0.18 } }}>
             <DevicePicker label={deviceLabel} devices={devices} value={device} onChange={onDevice}
               defaultLabel={t("Par défaut de Windows")} missingLabel={t("Appareil débranché : celui par défaut est utilisé")} />
-            <Slider label={t("Volume : {0}", label)} value={volume} onChange={onVolume} />
           </motion.div>
         )}
       </AnimatePresence>

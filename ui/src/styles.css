@@ -86,6 +86,10 @@ html.panel body {
   outline: 3px solid var(--accent);
   outline-offset: 3px;
 }
+/* dans un menu (bord coupé par son cadre) : l'anneau se dessine à l'intérieur */
+[data-nav-scope][role] [data-nav]:focus {
+  outline-offset: -3px;
+}
 
 /*
  * Code couleur (repris d'iBox, Décisions) : chaque action garde sa teinte partout.

@@ -12,7 +12,7 @@ import { Button } from "./ui";
 import { Bars, Slider } from "./controls";
 import { Pill, type IconName, type Tone } from "./ui";
 
-export function SoundMix({ clip: c, video, busy, onMix }: { clip: Clip; video: RefObject<HTMLVideoElement | null>; busy: boolean; onMix: (game: number, mic: number) => void }) {
+export function SoundMix({ clip: c, video, busy, onMix, onSettings }: { clip: Clip; video: RefObject<HTMLVideoElement | null>; busy: boolean; onMix: (game: number, mic: number) => void; onSettings?: () => void }) {
   const tracks = c.tracks ?? [];
   const separate = tracks.includes("game") || tracks.includes("mic");
   const [game, setGame] = useState(1);
@@ -42,6 +42,8 @@ export function SoundMix({ clip: c, video, busy, onMix }: { clip: Clip; video: R
             ? t("Le lecteur joue le mélange d’origine : le nouveau s’entend dans le clip créé.")
             : t("Ce clip n’a qu’une piste de son. Activez « Pistes séparées » dans Réglages : le jeu et le micro se régleront à part sur vos prochains clips.")}
         </p>
+        {/* ce réglage ne vaut que pour ce clip : les volumes des prochains se règlent à la capture */}
+        {onSettings && <Button tone="purple" variant="soft" icon="mic" onClick={onSettings}>{t("Volumes des prochains clips")}</Button>}
         <Button tone="blue" variant="ghost" disabled={!changed} onClick={() => { setGame(1); setMic(1); }}>{t("Rétablir")}</Button>
         <Button tone="orange" variant="primary" icon="sound" disabled={busy || !changed} onClick={() => onMix(game, mic)}>{t("Créer avec ce son")}</Button>
       </div>
