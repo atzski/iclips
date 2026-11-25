@@ -14,13 +14,18 @@ import { Trim } from "./Trim";
 import { AutoSheet } from "./Auto";
 import { dragOut, ShareSheet } from "./Share";
 import { Vertical } from "./Vertical";
+import { SettingsSheet } from "./Settings";
+import { SoundMix } from "./Sound";
 import { duration, size, when } from "./format";
 import { t } from "./i18n";
 import { useNav } from "./nav";
 import { Button, Icon } from "./ui";
 import logo from "./logo.png";
 
-type Filter = "all" | "favorites";
+type Filter = "all" | "videos" | "images" | "favorites";
+const FILTERS: Filter[] = ["all", "videos", "images", "favorites"];
+const filterLabel = (f: Filter) => (f === "all" ? t("Tous") : f === "videos" ? t("Clips") : f === "images" ? t("Captures") : t("Favoris"));
+const isImage = (c: Clip) => c.kind === "gif" || c.kind === "image";
 
 export function Studio() {
   const [clips, setClips] = useState<Clip[] | null>(null);
@@ -33,6 +38,7 @@ export function Studio() {
   /** Assemblage : clips choisis, dans l'ordre (null : pas en cours). */
   const [picked, setPicked] = useState<string[] | null>(null);
   const [auto, setAuto] = useState(false);
+  const [settings, setSettings] = useState(false);
 
   const load = useCallback(() => {
     host<Clip[]>("clips.list").then(setClips).catch((e: Error) => { setClips([]); setError(t("Action impossible : {0}", e.message)); });
@@ -41,12 +47,14 @@ export function Studio() {
   useEffect(() => { if (!error) return; const id = setTimeout(() => setError(null), 4000); return () => clearTimeout(id); }, [error]);
 
   const games = useMemo(() => [...new Set((clips ?? []).map((c) => c.game ?? ""))].sort((a, b) => a.localeCompare(b)), [clips]);
-  const shown = useMemo(() => (clips ?? []).filter((c) => (filter === "all" || c.favorite) && (game === null || (c.game ?? "") === game)), [clips, filter, game]);
+  const shown = useMemo(() => (clips ?? []).filter((c) =>
+    (filter === "all" || (filter === "favorites" && c.favorite) || (filter === "videos" && c.kind !== "image") || (filter === "images" && c.kind === "image"))
+    && (game === null || (c.game ?? "") === game)), [clips, filter, game]);
 
   // vignettes : une à la fois, pour les clips qui n'en ont pas encore
   const thumbing = useRef(false);
   useEffect(() => {
-    const todo = (clips ?? []).filter((c) => c.src && !c.thumb && c.kind !== "gif");
+    const todo = (clips ?? []).filter((c) => c.src && !c.thumb && !isImage(c));
     if (!todo.length || thumbing.current) return;
     thumbing.current = true;
     void (async () => {
@@ -82,7 +90,8 @@ export function Studio() {
   };
 
   useNav(() => {
-    if (auto) setAuto(false);
+    if (settings) setSettings(false);
+    else if (auto) setAuto(false);
     else if (confirm) setConfirm(false);
     else if (open) setOpen(null);
     else if (picked) setPicked(null);
@@ -103,7 +112,7 @@ export function Studio() {
           {clips && <p className="text-[0.85rem] font-semibold text-ink-soft">{clips.length === 1 ? t("1 clip") : t("{0} clips", clips.length)}</p>}
         </div>
         <div role="tablist" className="flex rounded-full bg-white p-1 shadow-sm">
-          {(["all", "favorites"] as const).map((f) => (
+          {FILTERS.map((f) => (
             <button
               key={f}
               role="tab"
@@ -112,12 +121,13 @@ export function Studio() {
               onClick={() => setFilter(f)}
               className={`h-9 rounded-full px-4 text-[0.9rem] font-bold transition ${filter === f ? "bg-accent text-on-accent" : "text-ink-soft hover:text-ink"}`}
             >
-              {f === "all" ? t("Tous") : t("Favoris")}
+              {filterLabel(f)}
             </button>
           ))}
         </div>
         <Button variant={picked ? "primary" : "soft"} aria-pressed={!!picked} onClick={() => setPicked((p) => (p ? null : []))}>{t("Assembler")}</Button>
         <Button icon="auto" onClick={() => setAuto(true)}>{t("Automatique")}</Button>
+        <Button icon="gear" onClick={() => setSettings(true)}>{t("Réglages")}</Button>
         <Button variant="ghost" icon="x" onClick={() => void host("screen.close")}>{t("Fermer")}</Button>
       </header>
 
@@ -147,7 +157,7 @@ export function Studio() {
                 <Card
                   clip={c}
                   order={picked ? picked.indexOf(c.name) + 1 : 0}
-                  onOpen={() => (picked ? c.kind !== "gif" && setPicked((p) => p && (p.includes(c.name) ? p.filter((n) => n !== c.name) : [...p, c.name])) : setOpen(c.name))}
+                  onOpen={() => (picked ? !isImage(c) && setPicked((p) => p && (p.includes(c.name) ? p.filter((n) => n !== c.name) : [...p, c.name])) : setOpen(c.name))}
                 />
               </motion.li>
             ))}
@@ -168,11 +178,13 @@ export function Studio() {
             onCancel={() => setConfirm(false)}
             busy={!!job}
             onRender={(kind, span, focus) => trim(current, kind, span, focus)}
+            onMix={(gameVol, mic) => startRender({ kind: "mix", name: current.name, game: gameVol, mic }, t("Mixage du son…"))}
           />
         )}
       </AnimatePresence>
 
       <AnimatePresence>{auto && <AutoSheet onClose={() => setAuto(false)} />}</AnimatePresence>
+      <AnimatePresence>{settings && <SettingsSheet onClose={() => setSettings(false)} />}</AnimatePresence>
 
       <AnimatePresence>
         {picked && !open && (
@@ -222,8 +234,8 @@ function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: (
     <button type="button" data-nav data-card draggable onDragStart={(e) => dragOut(e, c)} onClick={onOpen} className="group block w-full overflow-hidden rounded-xl bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="relative aspect-video bg-cream-deep">
         {/* première image du clip, sans le son : rien ne joue avant l'ouverture */}
-        {c.kind === "gif" ? (
-          src && <img src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        {isImage(c) ? (
+          src && <img src={src} alt="" draggable={false} className="absolute inset-0 h-full w-full object-cover" />
         ) : thumb ? (
           <img src={thumb} alt="" className="absolute inset-0 h-full w-full object-cover" />
         ) : (
@@ -252,19 +264,19 @@ function Card({ clip: c, order, onOpen }: { clip: Clip; order: number; onOpen: (
   );
 }
 
-function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCancel, busy, onRender }: {
+function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCancel, busy, onRender, onMix }: {
   clip: Clip; confirm: boolean; onClose: () => void; onTitle: (t: string) => void; onFavorite: () => void; onDelete: () => void; onCancel: () => void;
-  busy: boolean; onRender: (kind: "mp4" | "gif" | "vertical", span: Span, focus?: number) => void;
+  busy: boolean; onRender: (kind: "mp4" | "gif" | "vertical", span: Span, focus?: number) => void; onMix: (game: number, mic: number) => void;
 }) {
   const [title, setTitle] = useState(c.title ?? "");
   const [failed, setFailed] = useState(false);
   /** Couper, ou format vertical (cadre 9:16 à placer sur l'image). */
-  const [mode, setMode] = useState<"cut" | "vertical" | null>(null);
+  const [mode, setMode] = useState<"cut" | "vertical" | "sound" | null>(null);
   const [focus, setFocus] = useState(0.5);
   const [sharing, setSharing] = useState(false);
   /** Vidéo déjà verticale (ou carrée) : pas de format vertical à en tirer. */
   const [portrait, setPortrait] = useState(false);
-  const cutting = mode !== null;
+  const cutting = mode === "cut" || mode === "vertical";
   const [length, setLength] = useState(c.duration ?? 0);
   const video = useRef<HTMLVideoElement>(null);
   const back = useRef<HTMLButtonElement>(null);
@@ -275,7 +287,7 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
     <motion.div data-nav-scope className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <motion.div role="dialog" aria-modal="true" aria-label={label(c)} className="flex max-h-full w-full max-w-[min(78rem,100%)] flex-col overflow-hidden rounded-xl bg-white shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8 }} transition={SPRING.smooth}>
         <div className="relative min-h-0 flex-1 bg-black">
-          {src && c.kind === "gif" ? (
+          {src && isImage(c) ? (
             <img src={src} alt="" className="mx-auto max-h-[60vh] object-contain" />
           ) : src && !failed ? (
             <>
@@ -299,8 +311,9 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
             onKeyDown={(e) => { if (e.key === "Enter") { e.currentTarget.blur(); } }}
             className="h-11 min-w-0 flex-1 rounded-full bg-cream-deep px-5 text-[0.95rem] font-bold text-ink outline-none placeholder:text-ink-faint"
           />
-          {c.kind !== "gif" && <Button aria-pressed={mode === "cut"} variant={mode === "cut" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "cut" ? null : "cut"))}>{t("Couper")}</Button>}
-          {c.kind !== "gif" && !portrait && <Button icon="phone" aria-pressed={mode === "vertical"} variant={mode === "vertical" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "vertical" ? null : "vertical"))}>{t("Vertical")}</Button>}
+          {!isImage(c) && <Button icon="sound" aria-pressed={mode === "sound"} variant={mode === "sound" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "sound" ? null : "sound"))}>{t("Son")}</Button>}
+          {!isImage(c) && <Button aria-pressed={mode === "cut"} variant={mode === "cut" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "cut" ? null : "cut"))}>{t("Couper")}</Button>}
+          {!isImage(c) && !portrait && <Button icon="phone" aria-pressed={mode === "vertical"} variant={mode === "vertical" ? "primary" : "soft"} onClick={() => setMode((m) => (m === "vertical" ? null : "vertical"))}>{t("Vertical")}</Button>}
           <Button variant="primary" icon="share" onClick={() => setSharing(true)}>{t("Partager")}</Button>
           <Button icon="star" filled={c.favorite} onClick={onFavorite} aria-pressed={c.favorite}>{c.favorite ? t("Retirer des favoris") : t("Ajouter aux favoris")}</Button>
           {confirm ? (
@@ -313,11 +326,12 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
             <Button icon="trash" onClick={onDelete}>{t("Supprimer")}</Button>
           )}
         </div>
+        {mode === "sound" && <SoundMix clip={c} video={video} busy={busy} onMix={onMix} />}
         {cutting && <Trim key={mode} video={video} src={src} length={length} busy={busy} vertical={mode === "vertical"} onRender={(kind, span) => onRender(kind, span, focus)} />}
         <div className="px-6 pb-4 text-[0.8rem] font-semibold text-ink-soft">{[c.game, when(c.at), size(c.size), c.auto ? autoLabel(c.auto) : null].filter(Boolean).join(" · ")}</div>
       </motion.div>
       <AnimatePresence>
-        {sharing && <ShareSheet clip={c} onClose={() => setSharing(false)} onVertical={c.kind === "gif" || portrait ? null : () => { setSharing(false); setMode("vertical"); }} />}
+        {sharing && <ShareSheet clip={c} onClose={() => setSharing(false)} onVertical={isImage(c) || portrait ? null : () => { setSharing(false); setMode("vertical"); }} />}
       </AnimatePresence>
     </motion.div>
   );

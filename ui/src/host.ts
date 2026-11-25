@@ -9,8 +9,10 @@ export const PLUGIN_ID = "iclips";
 
 export interface Clip {
   name: string;
-  /** `gif` : fait par le montage, s'affiche comme une image. */
-  kind?: "video" | "gif";
+  /** `gif` : fait par le montage ; `image` : capture d'écran. Les deux s'affichent comme une image. */
+  kind?: "video" | "gif" | "image";
+  /** Pistes de son (`mix`, puis `game`, `mic` quand elles sont gardées à part). */
+  tracks?: string[];
   game: string | null;
   platformId: string | null;
   /** Horodatage (ms). */
@@ -44,6 +46,26 @@ export interface ClipStatus {
   max: number;
   /** Le micro écoute « Clip ça ! » (clips automatiques). */
   listening?: boolean;
+  /** Image du jeu figée à l'ouverture du panneau (`__shot`), à garder en capture d'écran. */
+  hasShot?: boolean;
+}
+
+export type Quality = "low" | "medium" | "high" | "max";
+
+/** Réglages de la capture des clips (permission `clips-settings`). */
+export interface CaptureSettings {
+  enabled: boolean;
+  quality: Quality;
+  seconds: number;
+  systemAudio: boolean;
+  microphone: boolean;
+  systemVolume: number;
+  micVolume: number;
+  tracks: boolean;
+  /** Octets tenus en mémoire pendant une partie, nombre et poids des captures. */
+  memory: number;
+  count: number;
+  bytes: number;
 }
 
 /** Clips automatiques (permission `clips-auto`). */
@@ -66,6 +88,7 @@ let sample: Clip[] = [
   { name: "1763900000000-mario-kart-8-deluxe.mp4", game: "Mario Kart 8 Deluxe", platformId: "switch", at: Date.now() - 3 * 86_400_000, size: 31_000_000, title: null, favorite: false, src: "" },
 ];
 
+let capture: CaptureSettings = { enabled: true, quality: "high", seconds: 30, systemAudio: true, microphone: true, systemVolume: 1, micVolume: 0.8, tracks: true, memory: 52_000_000, count: 14, bytes: 312_000_000 };
 let auto: AutoStatus = { voice: false, pad: true, end: false, listening: false, language: "fr-FR", error: null };
 
 function preview(call: string, arg: Record<string, unknown>): unknown {
@@ -91,6 +114,12 @@ function preview(call: string, arg: Record<string, unknown>): unknown {
     }, 1500);
     return { job };
   }
+  if (call === "capture.get") return capture;
+  if (call === "capture.set") {
+    capture = { ...capture, ...(arg as Partial<CaptureSettings>) };
+    return capture;
+  }
+  if (call === "shot.save") return { name: `${Date.now()}-capture.png` };
   if (call === "share.friends") return [
     { id: "a", name: "Léa", online: true, game: "Celeste" },
     { id: "b", name: "Sam", online: false, game: null },
@@ -115,7 +144,7 @@ function preview(call: string, arg: Record<string, unknown>): unknown {
     setTimeout(() => window.dispatchEvent(new CustomEvent("ibox:host", { detail: { event: "voice://heard", payload: null } })), 2000);
     return { ms: 8000 };
   }
-  if (call === "clips.status") return { game: "Hollow Knight", platformId: "pc", enabled: true, seconds: 30, max: 30 } satisfies ClipStatus;
+  if (call === "clips.status") return { game: "Hollow Knight", platformId: "pc", enabled: true, seconds: 30, max: 30, hasShot: false } satisfies ClipStatus;
   if (call === "clips.save") {
     const c: Clip = { name: `${Date.now()}-hollow-knight.mp4`, game: "Hollow Knight", platformId: "pc", at: Date.now(), size: 21_000_000, title: null, favorite: false, src: "" };
     sample = [c, ...sample];
@@ -132,6 +161,8 @@ export async function host<T>(call: string, arg: Record<string, unknown> = {}): 
   return out.ok as T;
 }
 
+/** Image figée à l'ouverture du panneau ; `stamp` change à chaque ouverture. */
+export const shotUrl = (stamp: number) => (inIbox ? `/${PLUGIN_ID}/__shot?at=${stamp}` : "");
 export const clipUrl = (c: Pick<Clip, "src">) => (c.src ? `/${PLUGIN_ID}/${c.src}` : "");
 export const thumbUrl = (c: Clip) => (c.thumb ? `/${PLUGIN_ID}/${c.thumb}` : "");
 

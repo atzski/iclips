@@ -1,7 +1,7 @@
 {
   "id": "iclips",
   "name": "iClips",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "author": {
     "name": "atzski",
     "username": "atzski"
@@ -17,6 +17,7 @@
     "clips-edit",
     "clips-auto",
     "clips-share",
+    "clips-settings",
     "overlay",
     "hotkey",
     "gamepad"

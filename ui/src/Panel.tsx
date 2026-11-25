@@ -1,6 +1,8 @@
 /**
- * Panneau en jeu d'iClips (0.2) : par-dessus la partie (Alt+V, ou Vue + X maintenus), on garde
- * les dernières secondes, on nomme le clip, on l'étoile, et l'on file au Studio. La fenêtre
+ * Panneau en jeu d'iClips : par-dessus la partie (raccourci de l'overlay d'iBox, Alt+V, ou
+ * Vue + X maintenus), on garde les dernières secondes, on nomme le clip, on l'étoile, on garde
+ * l'image du jeu figée à l'ouverture (capture d'écran), et l'on file au Studio ou à la
+ * Communauté. Avec iClips, ce panneau remplace l'overlay de capture d'iBox (0.6). La fenêtre
  * couvre l'écran, transparente ; le panneau glisse depuis le bord. Elle est exclue des captures :
  * le panneau n'apparaît jamais dans un clip.
  *
@@ -8,7 +10,8 @@
  */
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { clipUrl, host, onHost, type ClipStatus } from "./host";
+import { clipUrl, host, onHost, shotUrl, type ClipStatus } from "./host";
+import { playClip } from "./shutter";
 import { t } from "./i18n";
 import { SPRING } from "./ibox/motion";
 import { padAction, useNav } from "./nav";
@@ -28,6 +31,9 @@ export function Panel() {
   const [saved, setSaved] = useState<Saved | null>(null);
   const [error, setError] = useState<string | null>(null);
   const keep = useRef<HTMLButtonElement>(null);
+  /** Ouverture en cours (l'image figée change à chaque fois). */
+  const [stamp, setStamp] = useState(() => Date.now());
+  const [shotKept, setShotKept] = useState(false);
 
   const refresh = useCallback(() => {
     host<ClipStatus>("clips.status").then(setStatus).catch((e: Error) => setError(e.message));
@@ -37,7 +43,7 @@ export function Panel() {
   useEffect(() => {
     refresh();
     return onHost((event, payload) => {
-      if (event === "panel://open") { setSaved(null); setError(null); setOpen(true); refresh(); }
+      if (event === "panel://open") { setSaved(null); setShotKept(false); setStamp(Date.now()); setError(null); setOpen(true); refresh(); }
       else if (event === "panel://close-request") setOpen(false);
       else if (event === "voice://state") refresh();
       else if (event === "pad" && typeof payload === "string") padAction(payload, close);
@@ -57,11 +63,22 @@ export function Panel() {
     setError(null);
     try {
       const c = await host<{ name: string; game: string | null; src: string }>("clips.save");
+      playClip();
       setSaved({ ...c, title: "", favorite: false });
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+  const saveShot = async () => {
+    try {
+      await host("shot.save");
+      playClip();
+      setShotKept(true);
+      refresh();
+    } catch (e) {
+      setError((e as Error).message);
     }
   };
   const update = (patch: Partial<Pick<Saved, "title" | "favorite">>) => {
@@ -138,12 +155,27 @@ export function Panel() {
                   {busy ? t("Enregistrement…") : seconds > 0 ? t("Garder les {0} dernières secondes", seconds) : t("Garder le clip")}
                 </Button>
                 {why && <p className="text-[0.85rem] font-semibold text-ink-soft">{why}</p>}
-                <Button variant="soft" onClick={() => void host("screen.open")}>{t("Ouvrir le Studio")}</Button>
               </section>
             )}
 
+            {(status?.hasShot || shotKept) && (
+              // image du jeu figée à l'ouverture : la garder en capture d'écran
+              <section className="flex items-center gap-3 rounded-lg bg-cream-deep/60 p-2 pr-3">
+                <img src={shotUrl(stamp)} alt="" className="aspect-video w-36 shrink-0 rounded-md bg-black object-cover" />
+                {shotKept ? (
+                  <span className="flex flex-1 items-center gap-2 text-[0.9rem] font-bold text-accent-text"><Icon name="check" />{t("Capture gardée")}</span>
+                ) : (
+                  <Button icon="camera" className="flex-1" onClick={() => void saveShot()}>{t("Garder la capture")}</Button>
+                )}
+              </section>
+            )}
+            <div className="grid grid-cols-2 gap-2">
+              {!saved && <Button variant="soft" icon="play" onClick={() => void host("screen.open")}>{t("Ouvrir le Studio")}</Button>}
+              <Button variant="soft" icon="globe" className={saved ? "col-span-2" : ""} onClick={() => void host("community.open")}>{t("Communauté")}</Button>
+            </div>
+
             {error && <p role="alert" className="text-[0.85rem] font-bold text-peach-deep">{error}</p>}
-            <p className="text-[0.75rem] font-semibold text-ink-faint">{t("Alt+V ou Vue + X : ouvrir et fermer")}</p>
+            <p className="text-[0.75rem] font-semibold text-ink-faint">{t("Alt+X, Alt+V ou Vue + X : ouvrir et fermer")}</p>
           </motion.aside>
         )}
       </AnimatePresence>

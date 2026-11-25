@@ -99,7 +99,7 @@ export function ShareSheet({ clip: c, onClose, onVertical }: { clip: Clip; onClo
         {/* la vignette se glisse telle quelle hors du Studio */}
         <div draggable onDragStart={(e) => dragOut(e, c)} className="group flex cursor-grab items-center gap-4 rounded-lg border-2 border-dashed border-accent/50 bg-accent-soft/40 p-3 active:cursor-grabbing" title={t("Glissez le clip")}>
           <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-md bg-black">
-            {c.kind === "gif" ? (src && <img src={src} alt="" draggable={false} className="h-full w-full object-cover" />)
+            {c.kind === "gif" || c.kind === "image" ? (src && <img src={src} alt="" draggable={false} className="h-full w-full object-cover" />)
               : thumb ? <img src={thumb} alt="" draggable={false} className="h-full w-full object-cover" />
               : src && <video src={`${src}#t=0.5`} preload="metadata" muted playsInline tabIndex={-1} className="h-full w-full object-cover" />}
           </div>
