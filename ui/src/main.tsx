@@ -16,5 +16,15 @@ const panel = location.pathname.endsWith("/panel.html");
 document.title = panel ? "iClips" : t("iClips Studio");
 if (panel) document.documentElement.classList.add("panel");
 
+// iBox change de langue ou de thème : la fenêtre se recharge avec les nouveaux réglages
+window.addEventListener("ibox:host", (e) => {
+  const d = (e as CustomEvent<{ event: string; payload: { lang?: string; scheme?: string } }>).detail;
+  if (d?.event !== "look://changed") return;
+  const url = new URL(location.href);
+  if (d.payload.lang) url.searchParams.set("lang", d.payload.lang);
+  if (d.payload.scheme) url.searchParams.set("scheme", d.payload.scheme);
+  if (url.href !== location.href) location.replace(url.href);
+});
+
 // animations réduites si Windows le demande
 createRoot(document.getElementById("root")!).render(<MotionConfig reducedMotion="user">{panel ? <Panel /> : <Studio />}</MotionConfig>);
