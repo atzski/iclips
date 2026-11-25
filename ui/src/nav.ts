@@ -43,6 +43,13 @@ export function move(dir: Dir): void {
 
 const KEYS: Record<string, Dir> = { ArrowUp: "up", ArrowDown: "down", ArrowLeft: "left", ArrowRight: "right" };
 
+/** Panneau en jeu : la manette arrive du socle (XInput natif, événement `pad`). */
+export function padAction(action: string, onBack: () => void): void {
+  if (action === "up" || action === "down" || action === "left" || action === "right") move(action);
+  else if (action === "ok") (document.activeElement as HTMLElement | null)?.click();
+  else if (action === "back") onBack();
+}
+
 /** Clavier et manette. `onBack` : Échap ou B. */
 export function useNav(onBack: () => void): void {
   const back = useRef(onBack);

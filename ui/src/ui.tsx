@@ -6,6 +6,7 @@ const PATHS = {
   back: <path d="M14.5 5.5 8 12l6.5 6.5" />,
   play: <path d="M8 5.5v13l10-6.5z" fill="currentColor" />,
   x: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   trash: (
     <>
       <path d="M4.5 7h15" />

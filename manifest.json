@@ -1,11 +1,35 @@
 {
   "id": "iclips",
   "name": "iClips",
-  "version": "0.1.0",
-  "author": { "name": "atzski", "username": "atzski" },
-  "description": "Le studio de vos clips de jeu : galerie, lecteur, titres et favoris.",
+  "version": "0.2.0",
+  "author": {
+    "name": "atzski",
+    "username": "atzski"
+  },
+  "description": "Le studio de vos clips de jeu : un panneau en jeu pour garder le moment, une galerie pour le revoir.",
   "ibox": ">=1.0.8",
-  "platforms": ["windows"],
-  "permissions": ["clips"],
-  "screen": { "entry": "ui/studio.html", "title": "iClips Studio" }
+  "platforms": [
+    "windows"
+  ],
+  "permissions": [
+    "clips",
+    "clips-capture",
+    "overlay",
+    "hotkey",
+    "gamepad"
+  ],
+  "screen": {
+    "entry": "ui/studio.html",
+    "title": "iClips Studio"
+  },
+  "overlay": {
+    "entry": "ui/panel.html",
+    "side": "right",
+    "width": 480,
+    "hotkey": "Alt+V",
+    "padCombo": [
+      "back",
+      "x"
+    ]
+  }
 }

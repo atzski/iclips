@@ -70,6 +70,13 @@ body {
   user-select: none;
 }
 
+/* panneau en jeu : la fenêtre est transparente, seul le panneau se voit */
+html.panel,
+html.panel body {
+  background: transparent;
+  overflow: hidden;
+}
+
 /* focus visible au clavier comme à la manette */
 [data-nav]:focus-visible,
 [data-nav]:focus {

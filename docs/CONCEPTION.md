@@ -13,8 +13,8 @@ La fenêtre du plugin n'appelle aucune commande d'iBox : tout passe par `POST /i
 
 ## Fonctions
 
-1. **Galerie et lecteur** (C1, C2) : clips du profil par date, par jeu et favoris, titre, suppression ; tout au clavier et à la manette.
-2. **Panneau en jeu** (C2) : garder le clip, le nommer, l'étoiler sans quitter la partie (raccourci et combo manette, comme Music in the Box).
+1. **Galerie et lecteur** (C1, C2) : clips du profil par date, par jeu et favoris, vignettes, titre, suppression ; tout au clavier et à la manette.
+2. **Panneau en jeu** (C2) : garder le clip, le nommer, l'étoiler sans quitter la partie (Alt+V ou Vue + X maintenus). Raccourci réglable dans iBox : à faire.
 3. **Montage** (C3) : couper le début et la fin (sans réencodage, aux images clés), découper, assembler plusieurs clips, titre, export MP4 ou GIF. Rendu natif par tâches, avec progression.
 4. **Clips automatiques** (C4) :
    - **commande vocale « Clip ça ! »** (« Clip that! » en anglais) : le micro écoute seulement pendant une partie, seulement si l'option est activée, et la reconnaissance reste sur le PC (moteur de Windows, grammaire d'une seule phrase : rien n'est envoyé en ligne). Un témoin dit quand le micro écoute. Sur ce PC, le moteur français de Windows est présent (`MS-1036-80-DESK`) ;
@@ -26,7 +26,7 @@ La fenêtre du plugin n'appelle aucune commande d'iBox : tout passe par `POST /i
 | Étape | Contenu | État |
 |---|---|---|
 | **C1. Socle et squelette** | iBox : permission `clips`, écran `screen` (fenêtre `plugin-<id>:screen`), appels `clips.*`, lecture des vidéos par morceaux, blocage des commandes d'iBox pour les fenêtres de plugin, bouton « Ouvrir » dans Paramètres › Plugins. Plugin : Studio (galerie, lecteur, titre, favori, suppression), paquet signé. | Fait le 25/11/2026, non publié ; essayé dans la copie isolée d’iBox (`app.ibox.manualtest`, `Documents\iBox-sauvegarde\plugin-test\essai-iclips.ps1`) |
-| C2. Panneau en jeu | Overlay générique empaqueté (`overlay.entry`), vignettes natives, index des clips | |
+| **C2. Panneau en jeu** | iBox : panneau empaqueté (`overlay.entry`, Alt+V, Vue + X), permission `clips-capture` (`clips.status`, `clips.save`), `screen.open`, vignettes (`clips.thumb`, `__thumbs/`). Plugin 0.2.0 : panneau (garder, nommer, étoiler, ouvrir le Studio), vignettes faites dans la page, filtre par jeu. Pas d'index SQLite : le dossier et les fichiers json suffisent pour des centaines de clips. | Fait le 25/11/2026, non publié ; essayé dans la copie isolée (Alt+V ouvre et ferme, clip gardé, mise à jour 0.1 → 0.2) |
 | C3. Montage | Coupe, assemblage, titre, export | |
 | C4. Clips automatiques | « Clip ça ! », combo, fin de partie | |
 | C5. Partage | Pair à pair ou hébergeur | |

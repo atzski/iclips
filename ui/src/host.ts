@@ -18,6 +18,20 @@ export interface Clip {
   favorite: boolean;
   /** Chemin relatif au plugin (`__clips/<nom>`). */
   src: string;
+  /** Vignette faite par le Studio (`__thumbs/<nom>`), et durée en secondes. */
+  thumb?: string | null;
+  duration?: number | null;
+}
+
+/** État de la mémoire des clips (permission `clips-capture`). */
+export interface ClipStatus {
+  game: string | null;
+  platformId: string | null;
+  /** Clips activés dans Paramètres › Captures. */
+  enabled: boolean;
+  /** Secondes déjà en mémoire, et durée réglée. */
+  seconds: number;
+  max: number;
 }
 
 /** Hors d'iBox (aperçu `npm run dev`), des clips d'exemple sans vidéo. */
@@ -40,6 +54,12 @@ function preview(call: string, arg: Record<string, unknown>): unknown {
     return null;
   }
   if (call === "screen.close") window.close();
+  if (call === "clips.status") return { game: "Hollow Knight", platformId: "pc", enabled: true, seconds: 30, max: 30 } satisfies ClipStatus;
+  if (call === "clips.save") {
+    const c: Clip = { name: `${Date.now()}-hollow-knight.mp4`, game: "Hollow Knight", platformId: "pc", at: Date.now(), size: 21_000_000, title: null, favorite: false, src: "" };
+    sample = [c, ...sample];
+    return { name: c.name, game: c.game, src: "" };
+  }
   return null;
 }
 
@@ -51,7 +71,8 @@ export async function host<T>(call: string, arg: Record<string, unknown> = {}): 
   return out.ok as T;
 }
 
-export const clipUrl = (c: Clip) => (c.src ? `/${PLUGIN_ID}/${c.src}` : "");
+export const clipUrl = (c: Pick<Clip, "src">) => (c.src ? `/${PLUGIN_ID}/${c.src}` : "");
+export const thumbUrl = (c: Clip) => (c.thumb ? `/${PLUGIN_ID}/${c.thumb}` : "");
 
 /** Événements du socle (`clips://changed`…). */
 export function onHost(handler: (event: string, payload: unknown) => void): () => void {

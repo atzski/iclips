@@ -1,12 +1,13 @@
 /**
- * iClips Studio (0.1) : la galerie des clips du profil iBox, un lecteur, le titre et le favori
- * de chaque clip, la suppression. Le montage, les clips automatiques et le partage viennent
- * ensuite (docs/CONCEPTION.md).
+ * iClips Studio : la galerie des clips du profil iBox (vignettes, filtre par jeu et favoris),
+ * un lecteur, le titre et le favori de chaque clip, la suppression. Le montage, les clips
+ * automatiques et le partage viennent ensuite (docs/CONCEPTION.md).
  */
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SPRING } from "./ibox/motion";
-import { clipUrl, host, onHost, type Clip } from "./host";
+import { clipUrl, host, onHost, thumbUrl, type Clip } from "./host";
+import { makeThumb } from "./thumbs";
 import { duration, size, when } from "./format";
 import { t } from "./i18n";
 import { useNav } from "./nav";
@@ -18,6 +19,8 @@ type Filter = "all" | "favorites";
 export function Studio() {
   const [clips, setClips] = useState<Clip[] | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
+  /** Jeu choisi (`""` : hors jeu), `null` : tous. */
+  const [game, setGame] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +31,24 @@ export function Studio() {
   useEffect(() => { load(); return onHost((event) => { if (event === "clips://changed") load(); }); }, [load]);
   useEffect(() => { if (!error) return; const id = setTimeout(() => setError(null), 4000); return () => clearTimeout(id); }, [error]);
 
-  const shown = useMemo(() => (clips ?? []).filter((c) => filter === "all" || c.favorite), [clips, filter]);
+  const games = useMemo(() => [...new Set((clips ?? []).map((c) => c.game ?? ""))].sort((a, b) => a.localeCompare(b)), [clips]);
+  const shown = useMemo(() => (clips ?? []).filter((c) => (filter === "all" || c.favorite) && (game === null || (c.game ?? "") === game)), [clips, filter, game]);
+
+  // vignettes : une à la fois, pour les clips qui n'en ont pas encore
+  const thumbing = useRef(false);
+  useEffect(() => {
+    const todo = (clips ?? []).filter((c) => c.src && !c.thumb);
+    if (!todo.length || thumbing.current) return;
+    thumbing.current = true;
+    void (async () => {
+      for (const c of todo) {
+        const made = await makeThumb(clipUrl(c)).catch(() => null);
+        if (made) await host("clips.thumb", { name: c.name, ...made }).catch(() => undefined);
+      }
+      thumbing.current = false;
+      load();
+    })();
+  }, [clips, load]);
   const current = clips?.find((c) => c.name === open) ?? null;
 
   const act = async (call: string, arg: Record<string, unknown>) => {
@@ -70,6 +90,22 @@ export function Studio() {
         </div>
         <Button variant="ghost" icon="x" onClick={() => void host("screen.close")}>{t("Fermer")}</Button>
       </header>
+
+      {games.length > 1 && (
+        <nav aria-label={t("Tous les jeux")} className="flex gap-2 overflow-x-auto px-8 pb-4">
+          {[null, ...games].map((g) => (
+            <button
+              key={g ?? "*"}
+              data-nav
+              aria-pressed={game === g}
+              onClick={() => setGame(g)}
+              className={`h-9 shrink-0 rounded-full px-4 text-[0.88rem] font-bold transition ${game === g ? "bg-accent-soft text-accent-text" : "bg-white text-ink-soft shadow-sm hover:text-ink"}`}
+            >
+              {g === null ? t("Tous les jeux") : g || t("Hors jeu")}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <main className="min-h-0 flex-1 overflow-y-auto px-8 pb-8">
         {clips && shown.length === 0 ? (
@@ -116,13 +152,18 @@ function label(c: Clip) {
 }
 
 function Card({ clip: c, onOpen }: { clip: Clip; onOpen: () => void }) {
-  const [length, setLength] = useState(0);
+  const [length, setLength] = useState(c.duration ?? 0);
   const src = clipUrl(c);
+  const thumb = thumbUrl(c);
   return (
     <button type="button" data-nav data-card onClick={onOpen} className="group block w-full overflow-hidden rounded-xl bg-white text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="relative aspect-video bg-cream-deep">
         {/* première image du clip, sans le son : rien ne joue avant l'ouverture */}
-        {src && <video src={`${src}#t=0.5`} preload="metadata" muted playsInline tabIndex={-1} onLoadedMetadata={(e) => setLength(e.currentTarget.duration)} className="absolute inset-0 h-full w-full object-cover" />}
+        {thumb ? (
+          <img src={thumb} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        ) : (
+          src && <video src={`${src}#t=0.5`} preload="metadata" muted playsInline tabIndex={-1} onLoadedMetadata={(e) => setLength(e.currentTarget.duration)} className="absolute inset-0 h-full w-full object-cover" />
+        )}
         <span className="absolute inset-0 grid place-items-center opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">
           <span className="grid h-14 w-14 place-items-center rounded-full bg-black/55 text-white"><Icon name="play" size="1.6em" /></span>
         </span>

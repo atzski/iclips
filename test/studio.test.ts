@@ -36,3 +36,13 @@ describe("formats", () => {
     expect(when(new Date(2026, 10, 24, 22, 0).getTime(), now)).toMatch(/^Hier, 22:00$/);
   });
 });
+
+describe("vignettes", () => {
+  it("recadre au centre sans déformer", async () => {
+    const { cover } = await import("../ui/src/thumbs");
+    // 4:3 → 16:9 : la hauteur est rognée
+    expect(cover(1440, 1080)).toEqual({ sx: 0, sy: 135, sw: 1440, sh: 810 });
+    // déjà en 16:9 : tout l'image
+    expect(cover(1920, 1080)).toEqual({ sx: 0, sy: 0, sw: 1920, sh: 1080 });
+  });
+});

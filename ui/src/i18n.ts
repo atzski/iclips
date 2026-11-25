@@ -28,6 +28,20 @@ const EN: Record<string, string> = {
   "Action impossible : {0}": "Action failed: {0}",
   "Aujourd’hui, {0}": "Today, {0}",
   "Hier, {0}": "Yesterday, {0}",
+  // panneau en jeu
+  "Hors partie": "Not in a game",
+  "Clip gardé": "Clip kept",
+  "Ouvrir dans le Studio": "Open in the Studio",
+  "Ouvrir le Studio": "Open the Studio",
+  "Enregistrement…": "Saving…",
+  "Garder les {0} dernières secondes": "Keep the last {0} seconds",
+  "Garder le clip": "Keep the clip",
+  "Les clips sont désactivés dans Paramètres › Captures.": "Clips are turned off in Settings › Captures.",
+  "Les clips se gardent pendant une partie lancée depuis iBox.": "Clips are kept during a game launched from iBox.",
+  "La mémoire du clip se remplit…": "The clip memory is filling up…",
+  "Alt+V ou Vue + X : ouvrir et fermer": "Alt+V or View + X: open and close",
+  // Studio
+  "Tous les jeux": "All games",
 };
 
 export const lang: "fr" | "en" = typeof location !== "undefined" && new URLSearchParams(location.search).get("lang") === "en" ? "en" : "fr";
