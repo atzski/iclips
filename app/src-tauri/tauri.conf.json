@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "iClips",
+  "version": "0.8.0",
+  "identifier": "com.atzski.iclips",
+  "build": {
+    "beforeDevCommand": "npm --prefix .. run build",
+    "beforeBuildCommand": "npm --prefix .. run build",
+    "frontendDist": "../../dist/ui"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "publisher": "atzski",
+    "copyright": "© 2026 atzski",
+    "category": "Video",
+    "shortDescription": "Le studio de vos clips de jeu",
+    "longDescription": "iClips garde les dernières secondes de vos parties : gardez le moment à la voix (« Clip ça ! »), au clavier (Alt+X) ou à la manette, coupez-le, assemblez, passez en vertical, puis glissez-le dans Discord ou partagez un lien.",
+    "windows": {
+      "nsis": {
+        "installerIcon": "icons/icon.ico",
+        "languages": ["French", "English"],
+        "displayLanguageSelector": false,
+        "installMode": "currentUser",
+        "startMenuFolder": "iClips"
+      }
+    }
+  }
+}
