@@ -60,6 +60,21 @@ pub mod journal {
     }
 }
 
+/// Contrôle du micro contre les enceintes (`voice_echo`) pour le micro nommé `mic` : il capte ce
+/// micro et toutes les sorties de Windows.
+#[cfg(windows)]
+pub fn gate(mic: &str) -> Option<crate::voice_sapi::Gate> {
+    let id = crate::remote_play::audio::endpoints(true).into_iter().find(|e| crate::voice_sapi::same_device(&e.name, mic)).map(|e| e.id);
+    let m = crate::voice_echo::Monitor::start(id);
+    journal::write(&format!("contrôle des enceintes : micro « {mic} » comparé à {}", m.outputs().iter().map(|n| format!("« {n} »")).collect::<Vec<_>>().join(", ")));
+    Some(Box::new(move |start, ms| m.judge(start, ms)))
+}
+
+#[cfg(not(windows))]
+pub fn gate(_mic: &str) -> Option<crate::voice_sapi::Gate> {
+    None
+}
+
 /// Écoute en cours : moteur récent (micro par défaut) ou classique (micro choisi).
 pub enum Listener {
     #[cfg(windows)]
@@ -81,7 +96,7 @@ impl Listener {
         };
         if let Some(name) = mic.or(default_mic.as_deref()) {
             let h = on_heard.clone();
-            match crate::voice_sapi::Listener::start(tag, phrases(tag), crate::voice_sapi::Input::Device(name.to_string()), move || h()) {
+            match crate::voice_sapi::Listener::start(tag, phrases(tag), crate::voice_sapi::Input::Device(name.to_string()), gate(name), move || h()) {
                 Ok(l) => {
                     journal::write(&format!("écoute : moteur classique, micro « {name} » ({}), langue {tag}", if mic.is_some() { "choisi dans iClips" } else { "par défaut" }));
                     return Ok(Listener::Chosen(l));
@@ -94,7 +109,9 @@ impl Listener {
         }
         #[cfg(windows)]
         {
-            let r = imp::Listener::start(tag, move || on_heard()).map(Listener::Default);
+            // moteur récent : micro par défaut de Windows, même contrôle des enceintes
+            let default_name = crate::remote_play::audio::endpoints(true).into_iter().find(|e| e.default).map(|e| e.name);
+            let r = imp::Listener::start(tag, default_name.as_deref().and_then(gate), move || on_heard()).map(Listener::Default);
             match &r {
                 Ok(_) => journal::write(&format!("écoute : moteur récent de Windows, micro par défaut, langue {tag}")),
                 Err(e) => journal::write(&format!("écoute impossible : {e}")),
@@ -203,7 +220,7 @@ mod imp {
     }
 
     impl Listener {
-        pub fn start(tag: &str, on_heard: impl Fn() + Send + 'static) -> Result<Self, String> {
+        pub fn start(tag: &str, gate: Option<crate::voice_sapi::Gate>, on_heard: impl Fn() + Send + 'static) -> Result<Self, String> {
             let err = |e: windows::core::Error| message(&e);
             let rec = prepare(tag)?;
             let session = rec.ContinuousRecognitionSession().map_err(err)?;
@@ -218,10 +235,26 @@ mod imp {
                             // jeu passaient pour « Clip ça ! » (boucle de clips de la 1.0.10)
                             let confidence = r.Confidence()?;
                             let sure = matches!(confidence, SpeechRecognitionConfidence::High);
-                            let ok = r.Status()? == SpeechRecognitionResultStatus::Success && sure;
                             let raw = r.RawConfidence().unwrap_or(0.0);
-                            let ms = r.PhraseDuration().map(|d| d.Duration / 10_000).unwrap_or(0);
-                            super::journal::write(&format!("entendu (moteur récent) : confiance {}, score {raw:.2}, {ms} ms, accepté {ok}", confidence.0));
+                            let ms = r.PhraseDuration().map(|d| d.Duration / 10_000).unwrap_or(0).clamp(0, 60_000) as u32;
+                            // début de la phrase (heure UTC de Windows), ramené à l'horloge de `voice_echo`
+                            let begun = r.PhraseStartTime().ok().map(|d| {
+                                let then = (d.UniversalTime - 116_444_736_000_000_000) as f64 / 10_000.0;
+                                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs_f64() * 1_000.0).unwrap_or(then);
+                                crate::voice_echo::clock() - (now - then).clamp(0.0, 60_000.0)
+                            });
+                            let verdict = match (&gate, begun) { (Some(g), Some(b)) => g(b, ms), _ => None };
+                            let decision = if r.Status()? != SpeechRecognitionResultStatus::Success {
+                                Err("reconnaissance incomplète".to_string())
+                            } else if !sure {
+                                Err("confiance pas assez haute".to_string())
+                            } else {
+                                crate::voice_sapi::decide(1, 1.0, true, ms, verdict.as_ref())
+                            };
+                            let ok = decision.is_ok();
+                            let room = verdict.map(|v| v.describe()).unwrap_or_else(|| "sans contrôle des enceintes".into());
+                            let why = match decision { Ok(()) => "accepté".to_string(), Err(w) => format!("refusé : {w}") };
+                            super::journal::write(&format!("entendu (moteur récent) : confiance {}, score {raw:.2}, {ms} ms ; {room} ; {why}", confidence.0));
                             if ok {
                                 on_heard();
                             }

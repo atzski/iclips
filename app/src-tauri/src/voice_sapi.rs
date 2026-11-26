@@ -25,7 +25,8 @@ pub fn same_device(sapi: &str, endpoint: &str) -> bool {
     !a.is_empty() && (a == b || b.starts_with(&a) || a.starts_with(&b))
 }
 
-/// Reconnaissance de la phrase acceptée. Seule, une grammaire de deux phrases range presque tout
+/// Règle de repli (celle de la 1.0.19), quand le micro n'a pas pu être comparé aux sorties du PC
+/// (voir `decide`). Seule, une grammaire de deux phrases range presque tout
 /// ce que le moteur entend (musique, sonneries, dialogues d'un jeu) sous « Clip ça ! » en
 /// confiance « normale », score 0,5 à 0,77 : la boucle de clips de la 1.0.10. Avec la dictée
 /// concurrente (`rival`), une partie de ces sons part en dictée, mais pas tout : avec de la
@@ -37,16 +38,58 @@ pub fn same_device(sapi: &str, endpoint: &str) -> bool {
 /// sons : plus de faux clips que de phrases manquées. Sans dictée : « haute » et score 0,8.
 ///
 /// Durée (`ms`) : sa voix va de 0,37 à 2,9 s (dite fort ou traînée) ; au-delà de 3 s, jamais.
+#[cfg(test)]
 pub fn accepted(confidence: i8, engine: f32, rival: bool, ms: u32) -> bool {
+    refusal(confidence, engine, rival, ms).is_none()
+}
+
+/// Pourquoi le moteur vocal seul refuse la phrase (`None` : il l'accepte), voir `accepted`.
+fn refusal(confidence: i8, engine: f32, rival: bool, ms: u32) -> Option<String> {
     if ms > 3_000 {
-        return false;
+        return Some("plus de 3 s, ce n'est pas la phrase".into());
     }
-    if rival {
-        (confidence >= 1 && engine >= 0.75) || (confidence == 0 && engine >= 0.70)
-    } else {
-        confidence >= 1 && engine >= 0.8
+    let (high, normal) = if rival { (0.75, Some(0.70)) } else { (0.8, None) };
+    match (confidence, normal) {
+        (c, _) if c >= 1 && engine >= high => None,
+        (c, _) if c >= 1 => Some(format!("score trop bas (confiance haute, il faut {high:.2})")),
+        (0, Some(n)) if engine >= n => None,
+        (0, Some(n)) => Some(format!("score trop bas (confiance normale, il faut {n:.2})")),
+        (0, None) => Some("confiance normale sans dictée concurrente".into()),
+        _ => Some("confiance faible".into()),
     }
 }
+
+/// Décision complète sur un son reconnu comme la phrase (refonte 1.0.20, d'après de vrais
+/// enregistrements du joueur, voir `voice_echo`). Le score du moteur ne sépare pas sa voix du
+/// reste : sa vraie phrase sort même surtout en confiance « faible » (0,22 à 0,53), comme les
+/// sons du PC et sa conversation. Ce qui les sépare, c'est le micro :
+/// 1. la grammaire de la phrase (ou la dictée qui l'écrit), score 0,20 au moins, 3 s au plus ;
+/// 2. une voix au micro : 20 dB au-dessus de ce que les sorties du PC (musique, jeu,
+///    notifications d'iBox) et le bruit de fond y mettent ;
+/// 3. une phrase isolée : le micro plus calme de 5 dB juste avant et juste après.
+/// `verdict` : `None` si le micro n'a pas pu être comparé aux sorties (capture impossible) : la
+/// règle stricte de la 1.0.19 (`refusal`) décide alors seule. Rend la raison du refus.
+pub fn decide(confidence: i8, engine: f32, rival: bool, ms: u32, verdict: Option<&crate::voice_echo::Verdict>) -> Result<(), String> {
+    let Some(v) = verdict else {
+        return refusal(confidence, engine, rival, ms).map_or(Ok(()), Err);
+    };
+    if ms > 3_000 {
+        return Err("plus de 3 s, ce n'est pas la phrase".into());
+    }
+    if engine < MIN_SCORE {
+        return Err(format!("score trop bas (il faut {MIN_SCORE:.2})"));
+    }
+    if !v.voice() {
+        return Err(if v.speakers { "le son vient du PC (musique, jeu ou notification), pas d'une voix au micro".into() } else { "pas de voix au micro (bruit de la pièce)".into() });
+    }
+    if !v.isolated() {
+        return Err("phrase prise dans une conversation ou une chanson (pas de calme autour)".into());
+    }
+    Ok(())
+}
+
+/// Score minimal du moteur quand le micro est comparé aux sorties du PC.
+const MIN_SCORE: f32 = 0.20;
 
 /// La dictée a-t-elle écrit la phrase ? Dite fort, au milieu du son d'un jeu, « Clip ça ! » part
 /// parfois en dictée (« clip ça », « clic ça », « clips ça », « clippe sa »…) au lieu de la grammaire.
@@ -63,6 +106,10 @@ pub fn dictated(text: &str) -> bool {
 
 /// Identifiant de la grammaire de dictée concurrente.
 const DICTATION: u64 = 1;
+
+/// Contrôle du micro contre les enceintes (`voice_echo::Monitor::judge`) : début de la phrase
+/// (horloge de `voice_echo`) et durée en ms.
+pub type Gate = Box<dyn Fn(f64, u32) -> Option<crate::voice_echo::Verdict> + Send>;
 
 pub struct Listener {
     /// Langue écoutée (`fr-FR`…).
@@ -81,7 +128,7 @@ pub enum Input {
 }
 
 impl Listener {
-    pub fn start(tag: &str, phrases: &'static [&'static str], input: Input, on_heard: impl Fn() + Send + 'static) -> Result<Self, String> {
+    pub fn start(tag: &str, phrases: &'static [&'static str], input: Input, gate: Option<Gate>, on_heard: impl Fn() + Send + 'static) -> Result<Self, String> {
         let stop = Arc::new(AtomicBool::new(false));
         let alive = Arc::new(AtomicBool::new(true));
         let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
@@ -89,11 +136,11 @@ impl Listener {
         let thread = std::thread::spawn(move || {
             #[cfg(windows)]
             unsafe {
-                imp::run(langs, phrases, input, &s, &ready_tx, &on_heard)
+                imp::run(langs, phrases, input, gate, &s, &ready_tx, &on_heard)
             };
             #[cfg(not(windows))]
             {
-                let _ = (langs, phrases, input, &s, &on_heard);
+                let _ = (langs, phrases, input, gate, &s, &on_heard);
                 let _ = ready_tx.send(Err("La commande vocale n'existe que sous Windows.".into()));
             }
             a.store(false, Ordering::Relaxed);
@@ -167,7 +214,7 @@ mod imp {
             .collect()
     }
 
-    unsafe fn prepare(langs: &[&str], phrases: &[&str], input: Input) -> Result<(ISpRecognizer, ISpRecoContext, ISpRecoGrammar, Option<ISpRecoGrammar>), String> {
+    pub(super) unsafe fn prepare(langs: &[&str], phrases: &[&str], input: Input) -> Result<(ISpRecognizer, ISpRecoContext, ISpRecoGrammar, Option<ISpRecoGrammar>), String> {
         let e = |e: windows::core::Error| format!("moteur vocal : {}", e.message());
         let rec: ISpRecognizer = CoCreateInstance(&SpInprocRecognizer, None, CLSCTX_ALL).map_err(e)?;
         let engine = langs
@@ -213,7 +260,7 @@ mod imp {
         Ok((rec, ctx, g, free))
     }
 
-    pub unsafe fn run(langs: &[&str], phrases: &[&str], input: Input, stop: &AtomicBool, ready: &std::sync::mpsc::Sender<Result<(), String>>, on_heard: &dyn Fn()) {
+    pub unsafe fn run(langs: &[&str], phrases: &[&str], input: Input, gate: Option<super::Gate>, stop: &AtomicBool, ready: &std::sync::mpsc::Sender<Result<(), String>>, on_heard: &dyn Fn()) {
         let com = CoInitializeEx(None, COINIT_MULTITHREADED).is_ok();
         let (rec, ctx, _grammar, free) = match prepare(langs, phrases, input) {
             Ok(v) => v,
@@ -238,6 +285,14 @@ mod imp {
                 if id == SPEI_RECOGNITION.0 && ev.lParam.0 != 0 {
                     // le résultat appartient à l'événement : il est relâché ici
                     let result = ISpRecoResult::from_raw(ev.lParam.0 as *mut _);
+                    // début de la phrase : compte de l'horloge de Windows, ramené à celle de `voice_echo`
+                    let mut times = SPRECORESULTTIMES::default();
+                    let age = if result.GetResultTimes(&mut times).is_ok() && times.dwTickCount != 0 {
+                        windows_sys::Win32::System::SystemInformation::GetTickCount().wrapping_sub(times.dwTickCount).min(60_000)
+                    } else {
+                        0
+                    };
+                    let begun = crate::voice_echo::clock() - age as f64;
                     if let Ok(phrase) = result.GetPhrase() {
                         let confidence = (*phrase).Base.Rule.Confidence;
                         let engine = (*phrase).Base.Rule.SREngineConfidence;
@@ -245,18 +300,36 @@ mod imp {
                         let ms = (*phrase).Base.ulAudioSizeTime / 10_000;
                         CoTaskMemFree(Some(phrase as *const _));
                         // dictée : son texte peut être la phrase (dite au milieu du son d'un jeu)
-                        let said = if ours { false } else {
+                        let words = if ours { String::new() } else {
                             let mut p = windows::core::PWSTR::null();
-                            result.GetText(u32::MAX, u32::MAX, true, &mut p, None).is_ok() && !p.is_null() && super::dictated(&text(p))
+                            if result.GetText(u32::MAX, u32::MAX, true, &mut p, None).is_ok() && !p.is_null() { text(p) } else { String::new() }
                         };
-                        let ok = (ours && super::accepted(confidence, engine, free.is_some(), ms)) || said;
-                        // rien de ce qui est dit n'est écrit : seulement la grammaire touchée
-                        crate::voice::journal::write(&format!(
-                            "entendu : {}, confiance {confidence}, score {engine:.2}, {ms} ms, accepté {ok}",
-                            if ours { "la phrase" } else if said { "la phrase (en dictée)" } else { "autre chose (dictée)" }
-                        ));
+                        let said = !ours && super::dictated(&words);
+                        // rien de ce qui est dit n'est écrit : seulement la grammaire touchée, et
+                        // pour la phrase, ce que le micro a entendu comparé aux enceintes
+                        let line = if ours || said {
+                            let verdict = if age == 0 { None } else { gate.as_ref().and_then(|g| g(begun, ms)) };
+                            let decision = if ours {
+                                super::decide(confidence, engine, free.is_some(), ms, verdict.as_ref())
+                            } else {
+                                super::decide(1, 1.0, true, ms, verdict.as_ref())
+                            };
+                            let room = match (&verdict, &gate) {
+                                (Some(v), _) => v.describe(),
+                                (None, Some(_)) => "contrôle des enceintes impossible".into(),
+                                (None, None) => "sans contrôle des enceintes".into(),
+                            };
+                            let what = if ours { "la phrase" } else { "la phrase (en dictée)" };
+                            let verdict_txt = match &decision { Ok(()) => "accepté".to_string(), Err(why) => format!("refusé : {why}") };
+                            (decision.is_ok(), format!("entendu : {what}, confiance {confidence}, score {engine:.2}, {ms} ms ; {room} ; {verdict_txt}"))
+                        } else {
+                            (false, format!("entendu : autre chose (dictée), confiance {confidence}, score {engine:.2}, {ms} ms ; refusé : pas la phrase"))
+                        };
+                        let (ok, line) = line;
+                        crate::voice::journal::write(&line);
                         if std::env::var_os("IBOX_VOICE_DEBUG").is_some() {
-                            println!("  reconnu : {}, confiance {confidence}, moteur {engine:.3}, {ms} ms, accepté {ok}", if ours { "phrase" } else if said { "dictée = phrase" } else { "dictée" });
+                            // essais seulement : le texte dicté n'est jamais écrit au journal
+                            println!("  {:.1} s (début {:.2} s, âge {age} ms)  {line}{}", crate::voice_echo::clock() / 1000.0, begun / 1000.0, if ours { String::new() } else { format!(" [« {words} »]") });
                         }
                         if ok {
                             on_heard();
@@ -274,6 +347,123 @@ mod imp {
         if com {
             CoUninitialize();
         }
+    }
+}
+
+/// Un son reconnu dans un fichier (essais) : début et durée (ms depuis le début du fichier),
+/// grammaire de la phrase ou dictée, confiance, score, texte dicté.
+#[cfg(all(windows, test))]
+#[derive(Debug)]
+pub struct Hit {
+    pub start: u64,
+    pub ms: u32,
+    pub ours: bool,
+    pub confidence: i8,
+    pub engine: f32,
+    pub words: String,
+}
+
+/// Le moteur vocal, réglé comme en vrai (phrase + dictée concurrente), sur un fichier WAV.
+#[cfg(all(windows, test))]
+pub fn recognize_file(path: &std::path::Path) -> Vec<Hit> {
+    use windows::core::Interface;
+    use windows::Win32::Media::Speech::*;
+    use windows::Win32::System::Com::*;
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let (rec, ctx, _g, _d) = imp::prepare(sapi_language("fr-FR"), crate::voice::phrases("fr-FR"), Input::File(path.to_path_buf())).unwrap();
+        let mut out = vec![];
+        'outer: loop {
+            let _ = ctx.WaitForNotifyEvent(5_000);
+            loop {
+                let mut ev = SPEVENT::default();
+                let mut n = 0u32;
+                if ctx.GetEvents(1, &mut ev, &mut n).is_err() || n == 0 {
+                    break;
+                }
+                let id = ev._bitfield & 0xFFFF;
+                if id == SPEI_RECOGNITION.0 && ev.lParam.0 != 0 {
+                    let r = ISpRecoResult::from_raw(ev.lParam.0 as *mut _);
+                    let mut times = SPRECORESULTTIMES::default();
+                    let _ = r.GetResultTimes(&mut times);
+                    let Ok(phrase) = r.GetPhrase() else { continue };
+                    let ours = (*phrase).Base.ullGrammarID != DICTATION;
+                    let (confidence, engine) = ((*phrase).Base.Rule.Confidence, (*phrase).Base.Rule.SREngineConfidence);
+                    CoTaskMemFree(Some(phrase as *const _));
+                    let mut p = windows::core::PWSTR::null();
+                    let words = if !ours && r.GetText(u32::MAX, u32::MAX, true, &mut p, None).is_ok() && !p.is_null() {
+                        let s = p.to_string().unwrap_or_default();
+                        CoTaskMemFree(Some(p.0 as *const _));
+                        s
+                    } else {
+                        String::new()
+                    };
+                    out.push(Hit { start: times.ullStart / 10_000, ms: (times.ullLength / 10_000) as u32, ours, confidence, engine, words });
+                } else if id == SPEI_END_SR_STREAM.0 {
+                    break 'outer;
+                }
+            }
+        }
+        drop(rec);
+        out
+    }
+}
+
+/// Dictée seule sur un fichier WAV (essais) : (début ms, durée ms, texte) de chaque phrase.
+#[cfg(all(windows, test))]
+pub fn dictate_file(path: &std::path::Path) -> Vec<(u64, u64, String)> {
+    use windows::core::{Interface, HSTRING, PCWSTR};
+    use windows::Win32::Media::Speech::*;
+    use windows::Win32::System::Com::*;
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let rec: ISpRecognizer = CoCreateInstance(&SpInprocRecognizer, None, CLSCTX_ALL).unwrap();
+        let cat: ISpObjectTokenCategory = CoCreateInstance(&SpObjectTokenCategory, None, CLSCTX_ALL).unwrap();
+        cat.SetId(SPCAT_RECOGNIZERS, false).unwrap();
+        let list = cat.EnumTokens(&HSTRING::from("Language=40C"), PCWSTR::null()).unwrap();
+        let mut tok: Option<ISpObjectToken> = None;
+        list.Next(1, &mut tok, None).unwrap();
+        rec.SetRecognizer(&tok.unwrap()).unwrap();
+        let s: ISpStream = CoCreateInstance(&SpStream, None, CLSCTX_ALL).unwrap();
+        s.BindToFile(&HSTRING::from(path.as_os_str()), SPFM_OPEN_READONLY, None, None, 0).unwrap();
+        rec.SetInput(&s, true).unwrap();
+        let ctx = rec.CreateRecoContext().unwrap();
+        ctx.SetNotifyWin32Event().unwrap();
+        let mask = (1u64 << SPEI_RECOGNITION.0) | (1u64 << SPEI_END_SR_STREAM.0) | (1u64 << 30) | (1u64 << 33);
+        ctx.SetInterest(mask, mask).unwrap();
+        let d = ctx.CreateGrammar(1).unwrap();
+        d.LoadDictation(PCWSTR::null(), SPLO_STATIC).unwrap();
+        d.SetDictationState(SPRS_ACTIVE).unwrap();
+        rec.SetRecoState(SPRST_ACTIVE).unwrap();
+        let mut out = vec![];
+        'outer: loop {
+            let _ = ctx.WaitForNotifyEvent(5_000);
+            loop {
+                let mut ev = SPEVENT::default();
+                let mut n = 0u32;
+                if ctx.GetEvents(1, &mut ev, &mut n).is_err() || n == 0 {
+                    break;
+                }
+                let id = ev._bitfield & 0xFFFF;
+                if id == SPEI_RECOGNITION.0 && ev.lParam.0 != 0 {
+                    let r = ISpRecoResult::from_raw(ev.lParam.0 as *mut _);
+                    let mut times = SPRECORESULTTIMES::default();
+                    let _ = r.GetResultTimes(&mut times);
+                    let mut p = windows::core::PWSTR::null();
+                    let t = if r.GetText(u32::MAX, u32::MAX, true, &mut p, None).is_ok() && !p.is_null() {
+                        let s = p.to_string().unwrap_or_default();
+                        CoTaskMemFree(Some(p.0 as *const _));
+                        s
+                    } else {
+                        String::new()
+                    };
+                    out.push((times.ullStart / 10_000, times.ullLength / 10_000, t));
+                } else if id == SPEI_END_SR_STREAM.0 {
+                    break 'outer;
+                }
+            }
+        }
+        out
     }
 }
 
@@ -325,6 +515,47 @@ mod tests {
         }
     }
 
+    fn heard(voice_db: f32, isolation_db: f32, speakers: bool) -> crate::voice_echo::Verdict {
+        crate::voice_echo::Verdict { output: String::new(), speakers, lag_ms: 0, gain_db: None, voice_db, isolation_db }
+    }
+
+    /// Valeurs mesurées le 26/11/2026 sur les vrais enregistrements du joueur (micro Yeti).
+    #[test]
+    fn regle_mesuree() {
+        // ses « Clip ça ! » : surtout en confiance faible, refusés par la règle de repli…
+        let his = [(-1, 0.48, 830, 39.0, 13.6), (-1, 0.45, 570, 25.4, 29.8), (0, 0.55, 830, 38.8, 18.3), (-1, 0.34, 860, 33.6, 31.9),
+            (-1, 0.22, 900, 27.0, 20.0), (0, 0.50, 560, 24.5, 30.3), (-1, 0.25, 780, 25.1, 30.8), (-1, 0.39, 700, 27.5, 32.0),
+            (-1, 0.20, 450, 25.7, 6.2), (0, 0.61, 710, 29.9, 16.3), (-1, 0.41, 720, 27.7, 6.4), (-1, 0.44, 610, 34.0, 6.0),
+            (0, 0.54, 610, 32.8, 42.0), (0, 0.71, 690, 42.3, 20.0)];
+        for (c, s, ms, v, iso) in his {
+            assert!(decide(c, s, true, ms, Some(&heard(v, iso, true))).is_ok(), "{c} {s} {v} {iso}");
+        }
+        assert_eq!(his.iter().filter(|h| decide(h.0, h.1, true, h.2, None).is_ok()).count(), 1);
+        // … une phrase jouée par des haut-parleurs collés au micro : de -26 à +19 dB
+        for v in [-26.2, -9.5, -0.1, 3.2, 5.1, 6.1, 6.6, 7.3, 11.3, 11.5, 13.8, 14.9, 15.5, 16.3, 17.3, 18.9] {
+            assert!(decide(1, 0.9, true, 700, Some(&heard(v, 30.0, true))).is_err(), "{v}");
+        }
+        // une conversation : pas de calme autour
+        assert!(decide(0, 0.6, true, 700, Some(&heard(30.0, 2.0, false))).is_err());
+        // trop long, score trop bas : refusés même avec une voix
+        assert!(decide(1, 0.9, true, 3_200, Some(&heard(30.0, 30.0, false))).is_err());
+        assert!(decide(-1, 0.15, true, 700, Some(&heard(30.0, 30.0, false))).is_err());
+        let why = decide(0, 0.6, true, 700, Some(&heard(4.0, 30.0, true))).unwrap_err();
+        assert!(why.contains("PC"), "{why}");
+    }
+
+    /// Journal réel du 26/11/2026 (1.0.19, 11 h 54 à 12 h 02) : sans comparaison possible avec les
+    /// sorties, la règle de repli décide comme la 1.0.19.
+    #[test]
+    fn journal_rejoue_en_repli() {
+        let log = "0 0.64 1000 false|0 0.70 1060 true|0 0.78 540 true|-1 0.42 520 false|0 0.61 700 false|1 0.81 730 true|0 0.56 560 false|1 0.86 640 true|0 0.62 800 false|0 0.57 900 false|1 0.81 590 true|1 0.84 630 true|0 0.63 470 false|1 0.80 1510 true|1 0.82 910 true|0 0.76 2280 true|0 0.56 12920 false|0 0.71 1840 true|0 0.78 1310 true|0 0.69 600 false|1 0.87 580 true|0 0.72 510 true|0 0.73 780 true|0 0.66 480 false";
+        for line in log.split('|') {
+            let f: Vec<&str> = line.split(' ').collect();
+            let (c, s, ms, was): (i8, f32, u32, bool) = (f[0].parse().unwrap(), f[1].parse().unwrap(), f[2].parse().unwrap(), f[3] == "true");
+            assert_eq!(decide(c, s, true, ms, None).is_ok(), was, "{line}");
+        }
+    }
+
     /// Moteur réel sur le micro (`IBOX_VOICE_MIC` : nom, sinon celui par défaut), pendant
     /// `IBOX_VOICE_SECS` s (60) : affiche chaque reconnaissance avec sa confiance et son score
     /// (`IBOX_VOICE_DEBUG=1`), pour régler `accepted` sur une vraie voix.
@@ -338,10 +569,22 @@ mod tests {
         let secs: u64 = std::env::var("IBOX_VOICE_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(60);
         println!("micro : {name} ; micros SAPI : {:?}", inputs());
         let t0 = std::time::Instant::now();
-        let l = Listener::start("fr-FR", crate::voice::phrases("fr-FR"), Input::Device(name), move || println!("  ACCEPTÉ à {:.1} s", t0.elapsed().as_secs_f32())).expect("moteur");
+        let gate = crate::voice::gate(&name);
+        let l = Listener::start("fr-FR", crate::voice::phrases("fr-FR"), Input::Device(name), gate, move || println!("  ACCEPTÉ à {:.1} s", t0.elapsed().as_secs_f32())).expect("moteur");
         println!("écoute {secs} s");
         std::thread::sleep(std::time::Duration::from_secs(secs));
         drop(l);
+    }
+
+    /// Dictée seule sur un WAV (`IBOX_VOICE_WAV`) : `cargo test --lib dictee_fichier -- --ignored --nocapture`
+    #[cfg(windows)]
+    #[test]
+    #[ignore]
+    fn dictee_fichier() {
+        let f = std::path::PathBuf::from(std::env::var("IBOX_VOICE_WAV").expect("IBOX_VOICE_WAV"));
+        for (start, ms, text) in dictate_file(&f) {
+            println!("{:7.2} s  {ms:5} ms  dictée « {text} »  phrase : {}", start as f32 / 1000.0, dictated(&text));
+        }
     }
 
     /// Moteur réel sur un dossier de fichiers (`IBOX_VOICE_NOISE`) : combien de « Clip ça ! »
@@ -358,7 +601,7 @@ mod tests {
             let count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
             let c = count.clone();
             println!("{}", f.file_name().unwrap().to_string_lossy());
-            let l = Listener::start("fr-FR", crate::voice::phrases("fr-FR"), Input::File(f.clone()), move || { c.fetch_add(1, Ordering::Relaxed); }).expect("moteur");
+            let l = Listener::start("fr-FR", crate::voice::phrases("fr-FR"), Input::File(f.clone()), None, move || { c.fetch_add(1, Ordering::Relaxed); }).expect("moteur");
             let t0 = std::time::Instant::now();
             while l.alive() && t0.elapsed() < std::time::Duration::from_secs(30) {
                 std::thread::sleep(std::time::Duration::from_millis(100));
@@ -385,7 +628,7 @@ mod tests {
         for (file, expected) in [("oui.wav", true), ("non.wav", false)] {
             let heard = Arc::new(AtomicBool::new(false));
             let h = heard.clone();
-            let l = Listener::start("fr-FR", crate::voice::phrases("fr-FR"), Input::File(dir.join(file)), move || h.store(true, Ordering::Relaxed)).expect("moteur");
+            let l = Listener::start("fr-FR", crate::voice::phrases("fr-FR"), Input::File(dir.join(file)), None, move || h.store(true, Ordering::Relaxed)).expect("moteur");
             let t0 = std::time::Instant::now();
             while l.alive() && t0.elapsed() < std::time::Duration::from_secs(15) {
                 std::thread::sleep(std::time::Duration::from_millis(100));

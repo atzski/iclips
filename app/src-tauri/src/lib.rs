@@ -26,7 +26,7 @@ pub mod share;
 pub mod shortcut;
 pub mod toast;
 pub mod voice;
-#[cfg(windows)]
+pub mod voice_echo;
 pub mod voice_sapi;
 pub mod win;
 
