@@ -69,6 +69,8 @@ const PAUSE_GRACE_MS: u64 = 1_500;
 /// Après chaque clip gardé, la voix reste sourde 3 s (+ la grâce) : le son de déclencheur de la
 /// notification, entendu par le micro, était pris pour « Clip ça ! » et relançait un clip en boucle.
 const AFTER_CLIP_MS: u64 = 3_000;
+/// Au démarrage de l'écoute, la voix reste sourde 20 s (voir `voice_thread`).
+const AFTER_START_MS: u64 = 20_000;
 /// Garde-fou : 6 clips à la voix en moins de 2 min mettent « Clip ça ! » en pause 2 min, puis
 /// l'écoute reprend seule (comme iBox 1.0.18).
 const RUNAWAY_COUNT: usize = 6;
@@ -331,6 +333,9 @@ fn voice_thread(app: &AppHandle) {
                 set_listening(&app, false);
             }
             if want && listener.is_none() && now() >= RETRY_AT.load(Ordering::Relaxed) {
+                // l'écoute qui démarre est sourde 20 s (notification « vous écoute », sons du
+                // lancement : 1 ou 2 clips à chaque démarrage), comme iBox 1.0.19
+                QUIET_UNTIL.fetch_max(now() + AFTER_START_MS, Ordering::Relaxed);
                 match start(&app, ui, mic.as_deref()) {
                     Ok(l) => {
                         if let Ok(mut v) = VOICE.lock() { *v = (None, Some(l.tag().to_string())); }
