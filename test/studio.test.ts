@@ -147,3 +147,43 @@ describe("app autonome", () => {
     expect(k("Semicolon", ";", { altKey: true })).toBeNull();
   });
 });
+
+describe("Studio 0.9", () => {
+  it("range la galerie par date, du plus récent au plus ancien", async () => {
+    const { byDate, dateGroup } = await import("../ui/src/format");
+    const now = new Date(2026, 10, 26, 15, 0).getTime();
+    const at = (d: number, h = 12) => new Date(2026, 10, 26 - d, h).getTime();
+    expect(dateGroup(at(0, 1), now).key).toBe("today");
+    expect(dateGroup(at(1, 23), now).key).toBe("yesterday");
+    expect(dateGroup(at(6), now).key).toBe("week");
+    expect(dateGroup(at(7), now).key).toBe("2026-11");
+    expect(dateGroup(new Date(2025, 11, 3).getTime(), now)).toEqual({ key: "2025-12", label: "Décembre 2025" });
+    const groups = byDate([{ at: at(40) }, { at: at(0) }, { at: at(1) }, { at: at(0, 9) }, { at: at(3) }], now);
+    expect(groups.map((g) => [g.key, g.items.length])).toEqual([["today", 2], ["yesterday", 1], ["week", 1], ["2026-10", 1]]);
+    expect(groups[0].items[0].at).toBe(at(0));
+  });
+
+  it("zoome la frise sur le passage, ou autour de la tête de lecture", async () => {
+    const { zoomView } = await import("../ui/src/edit");
+    // passage court : lui et un peu d'air
+    expect(zoomView({ start: 10, end: 14 }, 0, 30)).toEqual({ start: 9.4, end: 14.6 });
+    // passage qui couvre presque tout : 8 s autour de la tête, sans sortir du clip
+    expect(zoomView({ start: 0, end: 30 }, 12, 30)).toEqual({ start: 8, end: 16 });
+    expect(zoomView({ start: 0, end: 30 }, 1, 30)).toEqual({ start: 0, end: 8 });
+    expect(zoomView({ start: 0, end: 30 }, 29, 30)).toEqual({ start: 22, end: 30 });
+  });
+
+  it("additionne la bande de montage", async () => {
+    const { totalLength } = await import("../ui/src/edit");
+    expect(totalLength([{ duration: 12 }, { duration: 8.5 }])).toEqual({ seconds: 20.5, exact: true });
+    expect(totalLength([{ duration: 12 }, { duration: null }])).toEqual({ seconds: 12, exact: false });
+  });
+
+  it("change de vitesse d'un cran, sans sortir des vitesses proposées", async () => {
+    const { nextSpeed } = await import("../ui/src/Playback");
+    expect(nextSpeed(1, -1)).toBe(0.5);
+    expect(nextSpeed(1, 1)).toBe(1.5);
+    expect(nextSpeed(0.25, -1)).toBe(0.25);
+    expect(nextSpeed(2, 1)).toBe(2);
+  });
+});

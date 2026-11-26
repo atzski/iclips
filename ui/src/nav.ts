@@ -2,7 +2,8 @@
  * Navigation au clavier et à la manette, comme dans iBox : flèches ou croix et stick gauche
  * pour aller d'un élément `[data-nav]` à son voisin, Entrée ou A pour valider, Échap ou B
  * pour revenir. La fenêtre du Studio a le focus : la Gamepad API du navigateur suffit.
- * Y ou Menu (0.7.1) ouvrent le menu de l'élément choisi, comme un clic droit.
+ * Y ou Menu (0.7.1) ouvrent le menu de l'élément choisi, comme un clic droit ; LB et RB (Studio
+ * 0.9) valent Page préc. et Page suiv. (clip précédent et suivant dans le lecteur).
  */
 import { useEffect, useRef } from "react";
 
@@ -85,11 +86,13 @@ export function useNav(onBack: () => void): void {
         const dir: Dir | null = b(12) || ay < -0.6 ? "up" : b(13) || ay > 0.6 ? "down" : b(14) || ax < -0.6 ? "left" : b(15) || ax > 0.6 ? "right" : null;
         if (dir !== held) { held = dir; if (dir) { move(dir); next = now + 380; } }
         else if (dir && now >= next) { move(dir); next = now + 120; }
-        for (const [i, act] of [[0, "a"], [1, "b"], [3, "y"], [9, "menu"]] as const) {
+        for (const [i, act] of [[0, "a"], [1, "b"], [3, "y"], [9, "menu"], [4, "lb"], [5, "rb"]] as const) {
           if (b(i) && !pressed.has(act)) {
             pressed.add(act);
             if (act === "a") (document.activeElement as HTMLElement | null)?.click();
             else if (act === "b") back.current();
+            // LB et RB : clip précédent et suivant dans le lecteur (Page préc., Page suiv.)
+            else if (act === "lb" || act === "rb") window.dispatchEvent(new KeyboardEvent("keydown", { key: act === "lb" ? "PageUp" : "PageDown" }));
             else openMenu();
           } else if (!b(i)) pressed.delete(act);
         }

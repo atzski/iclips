@@ -7,19 +7,29 @@
  * Tout glisse sur des ressorts : poignées, passage, zones assombries, repères de temps ; la tête
  * de lecture suit la vidéo image par image ; une bulle donne l'instant sous la poignée tenue et
  * sous le pointeur.
+ *
+ * Studio 0.9 : zoom de la frise sur le passage (Z), pour placer les poignées au dixième ; case
+ * « Remplacer l'original » (le clip coupé prend sa place, l'original n'est effacé qu'une fois le
+ * rendu réussi, dans `Studio.tsx`).
  */
 import { AnimatePresence, motion, useMotionValue, useTransform } from "motion/react";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
-import { clampSpan, GIF_MAX, setEdge, type Edge, type Span } from "./edit";
+import { clampSpan, GIF_MAX, setEdge, zoomView, type Edge, type Span } from "./edit";
 import { instant } from "./format";
 import { t } from "./i18n";
 import { SPRING } from "./ibox/motion";
 import { filmstrip } from "./thumbs";
-import { Button } from "./ui";
+import { Button, Icon } from "./ui";
 import { hint, useKeys } from "./keys";
 
 /** Pas d'une poignée au clavier ou à la manette (secondes). */
 const STEP = 0.2;
+/** Pas en zoom. */
+const FINE = 0.1;
+/** Case « Remplacer l'original », gardée d'une fois sur l'autre. */
+const REPLACE_KEY = "iclips.trim.replace";
+function readReplace() { try { return localStorage.getItem(REPLACE_KEY) === "1"; } catch { return false; } }
+function writeReplace(on: boolean) { try { localStorage.setItem(REPLACE_KEY, on ? "1" : "0"); } catch { /* sans stockage : non gardée */ } }
 const FRAMES = 12;
 /** Ressort des poignées : vif sous le doigt, doux quand elles sautent (I, O, flèches). */
 const FOLLOW = { type: "spring", stiffness: 620, damping: 44, mass: 0.6 } as const;
@@ -31,8 +41,12 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
   busy: boolean;
   /** Format vertical : un seul bouton, « Créer en vertical ». */
   vertical?: boolean;
-  onRender: (kind: "mp4" | "gif" | "vertical", span: Span) => void;
+  /** `replace` : le clip coupé remplace l'original (« Créer le clip » seulement). */
+  onRender: (kind: "mp4" | "gif" | "vertical", span: Span, replace?: boolean) => void;
 }) {
+  const [replace, setReplace] = useState(readReplace);
+  /** Frise zoomée : la partie du clip montrée (null : tout le clip). */
+  const [view, setView] = useState<Span | null>(null);
   const [span, setSpan] = useState<Span>(() => clampSpan({ start: 0, end: length }, length));
   // tant que rien n'est tiré, le passage couvre tout le clip (sa durée arrive avec la vidéo)
   const [touched, setTouched] = useState(false);
@@ -44,15 +58,18 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
   const dragging = useRef<Edge | "head" | null>(null);
 
   const len = length > 0 ? length : 1;
-  const lenRef = useRef(len);
-  lenRef.current = len;
-  const frac = (s: number) => Math.min(100, Math.max(0, (s / len) * 100));
+  const v0 = view?.start ?? 0;
+  const vw = view ? Math.max(0.1, view.end - view.start) : len;
+  const viewRef = useRef({ v0, vw });
+  viewRef.current = { v0, vw };
+  const frac = (s: number) => Math.min(100, Math.max(0, ((s - v0) / vw) * 100));
   const pct = (s: number) => `${frac(s)}%`;
+  const inView = (s: number) => s >= v0 - 0.01 && s <= v0 + vw + 0.01;
 
   useEffect(() => setSpan((s) => clampSpan(touched ? s : { start: 0, end: length }, length)), [length, touched]);
   // tête de lecture : suit la vidéo à chaque image (plus de saut toutes les 250 ms)
   const head = useMotionValue(0);
-  const headLeft = useTransform(head, (v) => `${Math.min(100, Math.max(0, (v / lenRef.current) * 100))}%`);
+  const headLeft = useTransform(head, (v) => `${Math.min(100, Math.max(0, ((v - viewRef.current.v0) / viewRef.current.vw) * 100))}%`);
   useEffect(() => {
     let raf = 0;
     const loop = () => {
@@ -68,9 +85,9 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
     if (!src || !(length > 0)) return;
     let stop = false;
     setFrames([]);
-    void filmstrip(src, FRAMES, (i, url) => setFrames((f) => { const n = [...f]; n[i] = url; return n; }), () => stop).catch(() => undefined);
+    void filmstrip(src, FRAMES, (i, url) => setFrames((f) => { const n = [...f]; n[i] = url; return n; }), () => stop, view ?? undefined).catch(() => undefined);
     return () => { stop = true; };
-  }, [src, length]);
+  }, [src, length, view]);
 
   const seek = (s: number) => {
     const v = video.current;
@@ -80,7 +97,7 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
   };
   const timeAt = (x: number) => {
     const r = track.current?.getBoundingClientRect();
-    return r && r.width > 0 ? Math.min(1, Math.max(0, (x - r.left) / r.width)) * len : 0;
+    return r && r.width > 0 ? v0 + Math.min(1, Math.max(0, (x - r.left) / r.width)) * vw : v0;
   };
   // passage à jour entre deux rendus (glissement rapide)
   const current = useRef(span);
@@ -92,6 +109,7 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
     setSpan(next);
     seek(edge === "start" ? next.start : next.end);
   };
+  const zoom = () => setView((cur) => (cur ? null : zoomView(current.current, video.current?.currentTime ?? 0, length)));
 
   const grab = (e: ReactPointerEvent<HTMLElement>, what: Edge | "head") => {
     e.preventDefault();
@@ -124,6 +142,7 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
     if (at === undefined) return false;
     if (k === "i") { moveEdge("start", at); return true; }
     if (k === "o") { moveEdge("end", at); return true; }
+    if (k === "z") { zoom(); return true; }
     return false;
   });
 
@@ -151,12 +170,18 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
           </motion.span>
         </span>
         <span className="flex-1" />
-        <Button tone="blue" variant="ghost" icon="play" title={hint(t("Lire le passage"), t("Espace"))} onClick={playSpan}>{t("Lire le passage")}</Button>
+        <Button tone="blue" variant={view ? "primary" : "soft"} icon={view ? "unzoom" : "zoom"} aria-pressed={!!view} title={hint(view ? t("Voir tout le clip") : t("Zoom sur le passage"), "Z")} onClick={zoom}>{view ? t("Tout le clip") : t("Zoom")}</Button>
+        <Button tone="blue" variant="ghost" icon="play" onClick={playSpan}>{t("Lire le passage")}</Button>
         {vertical ? (
           <Button tone="pink" variant="primary" icon="phone" disabled={busy} onClick={() => onRender("vertical", span)}>{t("Créer en vertical")}</Button>
         ) : (
           <>
-            <Button variant="primary" icon="cut" disabled={busy} onClick={() => onRender("mp4", span)}>{t("Créer le clip")}</Button>
+            <label className="flex cursor-pointer items-center gap-2 rounded-full px-3 py-2 text-[0.86rem] font-bold text-ink-soft transition-colors hover:text-ink" title={t("Le clip coupé prend la place de l’original, effacé une fois le clip prêt.")}>
+              <input type="checkbox" data-nav checked={replace} onChange={(e) => { setReplace(e.target.checked); writeReplace(e.target.checked); }} className="peer sr-only" />
+              <span aria-hidden="true" className="grid h-5 w-5 place-items-center rounded-md border-2 border-[color-mix(in_srgb,var(--accent)_55%,transparent)] text-transparent transition-colors peer-checked:border-accent peer-checked:bg-accent peer-checked:text-[#fff] peer-focus-visible:ring-4 peer-focus-visible:ring-accent/40"><Icon name="check" size="0.85em" /></span>
+              {t("Remplacer l’original")}
+            </label>
+            <Button variant="primary" icon="cut" disabled={busy} onClick={() => onRender("mp4", span, replace)}>{replace ? t("Couper le clip") : t("Créer le clip")}</Button>
             <Button tone="pink" icon="camera" disabled={busy || gifTooLong} onClick={() => onRender("gif", span)}>{t("Créer un GIF")}</Button>
           </>
         )}
@@ -164,7 +189,7 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
 
       <div
         ref={track}
-        className="relative mx-5 mt-7 h-16 cursor-pointer touch-none select-none rounded-lg bg-cream-deep"
+        className={`relative mx-5 mt-7 h-16 cursor-pointer touch-none select-none rounded-lg bg-cream-deep transition-shadow ${view ? "shadow-[0_0_0_2px_var(--tone-blue)]" : ""}`}
         onPointerDown={(e) => grab(e, "head")}
         onPointerMove={drag}
         onPointerUp={drop}
@@ -187,10 +212,10 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
         {/* le passage : cadre violet qui respire quand on tient une poignée */}
         <motion.div className="pointer-events-none absolute inset-y-0 border-y-[3px] border-accent" initial={false}
           animate={{ left: pct(span.start), width: `${frac(span.end) - frac(span.start)}%`, boxShadow: held ? "0 0 22px -2px var(--accent-glow)" : "0 0 0 0 transparent" }} transition={FOLLOW} />
-        <Handle edge="start" at={span.start} left={pct(span.start)} len={len} label={t("Début du passage")} held={held === "start"}
-          onGrab={(e) => grab(e, "start")} onStep={(d) => moveEdge("start", span.start + d)} onFocusChange={(f) => setFocused(f ? "start" : null)} />
-        <Handle edge="end" at={span.end} left={pct(span.end)} len={len} label={t("Fin du passage")} held={held === "end"}
-          onGrab={(e) => grab(e, "end")} onStep={(d) => moveEdge("end", span.end + d)} onFocusChange={(f) => setFocused(f ? "end" : null)} />
+        <Handle edge="start" at={span.start} left={pct(span.start)} len={len} label={t("Début du passage")} held={held === "start"} dim={!inView(span.start)}
+          onGrab={(e) => grab(e, "start")} onStep={(d) => moveEdge("start", span.start + d * (view ? FINE / STEP : 1))} onFocusChange={(f) => setFocused(f ? "start" : null)} />
+        <Handle edge="end" at={span.end} left={pct(span.end)} len={len} label={t("Fin du passage")} held={held === "end"} dim={!inView(span.end)}
+          onGrab={(e) => grab(e, "end")} onStep={(d) => moveEdge("end", span.end + d * (view ? FINE / STEP : 1))} onFocusChange={(f) => setFocused(f ? "end" : null)} />
         {/* l'instant sous la poignée tenue (ou qui a le focus), au-dessus de la bande */}
         <AnimatePresence>
           {(held ?? focused) && (
@@ -222,15 +247,15 @@ export function Trim({ video, src, length, busy, vertical, onRender }: {
         <motion.span className="absolute -translate-x-1/2" initial={false} animate={{ left: pct(span.end) }} transition={FOLLOW}>{instant(span.end)}</motion.span>
       </div>
       <p className="text-[0.78rem] font-semibold text-ink-faint">
-        {vertical ? t("Faites glisser le cadre sur l’image pour choisir ce qui reste, et les poignées pour le passage. La vidéo est réencodée en 9:16, coupée à l’image près.") : gifTooLong ? t("Un GIF dure 10 secondes au plus : raccourcissez le passage.") : t("Faites glisser les poignées pour choisir le passage (I et O au clavier ; à la manette : gauche et droite sur une poignée). Le clip commence sur l’image clé qui précède le début (une par seconde).")}
+        {vertical ? t("Faites glisser le cadre sur l’image pour choisir ce qui reste, et les poignées pour le passage. La vidéo est réencodée en 9:16, coupée à l’image près.") : view ? t("Zoom : la frise montre {0} à {1}, les poignées avancent d’un dixième de seconde. Z revient à tout le clip.", instant(view.start), instant(view.end)) : gifTooLong ? t("Un GIF dure 10 secondes au plus : raccourcissez le passage.") : t("Faites glisser les poignées pour choisir le passage (I et O au clavier ; à la manette : gauche et droite sur une poignée ; Z : zoom). Le clip commence sur l’image clé qui précède le début (une par seconde).")}
       </p>
     </div>
   );
 }
 
 /** Poignée : la saisie part d'ici, le glissement remonte à la bande (`onPointerMove`). */
-function Handle({ edge, at, left, len, label, held, onGrab, onStep, onFocusChange }: {
-  edge: Edge; at: number; left: string; len: number; label: string; held: boolean;
+function Handle({ edge, at, left, len, label, held, dim, onGrab, onStep, onFocusChange }: {
+  edge: Edge; at: number; left: string; len: number; label: string; held: boolean; dim?: boolean;
   onGrab: (e: ReactPointerEvent<HTMLElement>) => void; onStep: (delta: number) => void; onFocusChange: (focused: boolean) => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
@@ -260,7 +285,7 @@ function Handle({ edge, at, left, len, label, held, onGrab, onStep, onFocusChang
       onFocus={() => onFocusChange(true)}
       onBlur={() => onFocusChange(false)}
       initial={false}
-      animate={{ left, scaleY: held ? 1.14 : 1, scaleX: held ? 1.2 : 1 }}
+      animate={{ left, scaleY: held ? 1.14 : 1, scaleX: held ? 1.2 : 1, opacity: dim ? 0.35 : 1 }}
       whileHover={{ scaleX: 1.18 }}
       transition={FOLLOW}
       style={{ marginLeft: edge === "start" ? "-1.25rem" : 0, originX: edge === "start" ? 1 : 0 }}

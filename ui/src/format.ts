@@ -22,6 +22,31 @@ export function size(bytes: number): string {
   return `${(bytes / 1024 / 1024).toLocaleString(locale, { maximumFractionDigits: 1 })} ${fr ? "Mo" : "MB"}`;
 }
 
+const startOfDay = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+
+/** Groupe de la galerie (Studio 0.9) : aujourd'hui, hier, les 7 derniers jours, puis le mois. */
+export function dateGroup(at: number, now = Date.now()): { key: string; label: string } {
+  const d = new Date(at);
+  const diff = Math.round((startOfDay(new Date(now)) - startOfDay(d)) / 86_400_000);
+  if (diff <= 0) return { key: "today", label: t("Aujourd’hui") };
+  if (diff === 1) return { key: "yesterday", label: t("Hier") };
+  if (diff < 7) return { key: "week", label: t("7 derniers jours") };
+  const month = d.toLocaleDateString(locale, { month: "long", year: "numeric" });
+  return { key: `${d.getFullYear()}-${d.getMonth() + 1}`, label: month.charAt(0).toUpperCase() + month.slice(1) };
+}
+
+/** Clips rangés par groupe de date, du plus récent au plus ancien. */
+export function byDate<T extends { at: number }>(items: T[], now = Date.now()): { key: string; label: string; items: T[] }[] {
+  const out: { key: string; label: string; items: T[] }[] = [];
+  for (const it of [...items].sort((a, b) => b.at - a.at)) {
+    const g = dateGroup(it.at, now);
+    const last = out[out.length - 1];
+    if (last?.key === g.key) last.items.push(it);
+    else out.push({ ...g, items: [it] });
+  }
+  return out;
+}
+
 /** « Aujourd’hui, 14:05 », « Hier, 09:12 », sinon la date. */
 export function when(at: number, now = Date.now()): string {
   const d = new Date(at);

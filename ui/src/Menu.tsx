@@ -30,8 +30,10 @@ function deleteQuestion(c: Clip) {
   return c.kind === "image" ? t("Supprimer cette capture ? Elle est effacée de ce PC.") : c.kind === "gif" ? t("Supprimer ce GIF ? Il est effacé de ce PC.") : t("Supprimer ce clip ? Il est effacé de ce PC.");
 }
 
-export function ClipMenu({ clip: c, at, onEdit, onOpen, onDelete, onSelect, onClose }: {
+export function ClipMenu({ clip: c, at, onEdit, onOpen, onDelete, onSelect, onClose, onFavorite, onCopy, onShare }: {
   clip: Clip; at: { x: number; y: number }; onEdit: () => void; onOpen: () => void; onDelete: () => void; onSelect: () => void; onClose: () => void;
+  /** Studio 0.9 : les actions rapides des cartes, aussi au clavier et à la manette. */
+  onFavorite?: () => void; onCopy?: () => void; onShare?: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [confirm, setConfirm] = useState(false);
@@ -101,8 +103,11 @@ export function ClipMenu({ clip: c, at, onEdit, onOpen, onDelete, onSelect, onCl
               {image
                 ? <Item icon="play" tone="accent" label={t("Ouvrir")} index={0} onClick={onOpen} />
                 : <Item icon="cut" tone="orange" label={t("Modifier le clip")} index={0} onClick={onEdit} />}
-              <Item icon="check" tone="blue" label={t("Sélectionner plusieurs clips")} hint="S" index={1} onClick={onSelect} />
-              <Item icon="trash" tone="red" label={deleteLabel(c)} hint={t("Suppr")} index={2} onClick={() => setConfirm(true)} />
+              {onFavorite && <Item icon="star" tone="yellow" label={c.favorite ? t("Retirer des favoris") : t("Ajouter aux favoris")} index={1} onClick={onFavorite} />}
+              {onCopy && <Item icon="copy" tone="blue" label={t("Copier le clip")} index={2} onClick={onCopy} />}
+              {onShare && <Item icon="share" tone="green" label={t("Partager")} index={3} onClick={onShare} />}
+              <Item icon="check" tone="blue" label={t("Sélectionner plusieurs clips")} hint="S" index={4} onClick={onSelect} />
+              <Item icon="trash" tone="red" label={deleteLabel(c)} hint={t("Suppr")} index={5} onClick={() => setConfirm(true)} />
             </motion.ul>
           )}
         </AnimatePresence>

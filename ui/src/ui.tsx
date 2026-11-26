@@ -108,6 +108,33 @@ const PATHS = {
       <path d="M10.2 11v5M13.8 11v5" />
     </>
   ),
+  // Studio 0.9 : lecteur de studio, coupe zoomée, galerie
+  up: <path d="M6.5 14.5 12 9l5.5 5.5" />,
+  down: <path d="M6.5 9.5 12 15l5.5-5.5" />,
+  expand: <path d="M4.5 9V4.5H9M15 4.5h4.5V9M19.5 15v4.5H15M9 19.5H4.5V15" />,
+  shrink: <path d="M9 4.5V9H4.5M19.5 9H15V4.5M15 19.5V15h4.5M4.5 15H9v4.5" />,
+  zoom: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6" />
+      <path d="M15 15l4.5 4.5M8 10.5h5M10.5 8v5" />
+    </>
+  ),
+  unzoom: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6" />
+      <path d="M15 15l4.5 4.5M8 10.5h5" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="4.5" y="4.5" width="6" height="6" rx="1.4" />
+      <rect x="13.5" y="4.5" width="6" height="6" rx="1.4" />
+      <rect x="4.5" y="13.5" width="6" height="6" rx="1.4" />
+      <rect x="13.5" y="13.5" width="6" height="6" rx="1.4" />
+    </>
+  ),
+  stepBack: <path d="M16.5 6v12M13 6.5 7 12l6 5.5" />,
+  stepFwd: <path d="M7.5 6v12M11 6.5l6 5.5-6 5.5" />,
 };
 export type IconName = keyof typeof PATHS;
 

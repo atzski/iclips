@@ -1711,7 +1711,7 @@ dependencies = [
 
 [[package]]
 name = "iclips"
-version = "0.8.9"
+version = "0.9.0"
 dependencies = [
  "base64 0.22.1",
  "gif",

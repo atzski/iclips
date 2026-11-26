@@ -30,6 +30,31 @@ export function setEdge(span: Span, edge: Edge, at: number, length: number): Spa
     : clampSpan({ start: span.start, end: Math.max(at, span.start + 0.5) }, length);
 }
 
+/**
+ * Fenêtre de la frise zoomée (Studio 0.9) : le passage et un peu d'air autour, ou 8 s autour de
+ * la tête de lecture quand le passage couvre presque tout le clip.
+ */
+export function zoomView(span: Span, at: number, length: number): Span {
+  const len = Number.isFinite(length) && length > 0 ? length : UNKNOWN;
+  const spanLen = span.end - span.start;
+  if (spanLen <= len * 0.6) {
+    const pad = Math.max(0.5, spanLen * 0.15);
+    return { start: Math.max(0, span.start - pad), end: Math.min(len, span.end + pad) };
+  }
+  const start = Math.min(Math.max(0, at - 4), Math.max(0, len - 8));
+  return { start, end: Math.min(len, start + 8) };
+}
+
+/** Durée totale d'un assemblage, et si elle est sûre (une durée de clip encore inconnue). */
+export function totalLength(clips: { duration?: number | null }[]): { seconds: number; exact: boolean } {
+  let seconds = 0, exact = true;
+  for (const c of clips) {
+    if (c.duration && c.duration > 0) seconds += c.duration;
+    else exact = false;
+  }
+  return { seconds, exact };
+}
+
 /** Assemblage de clips entiers, dans l'ordre choisi. */
 export function joinSegments(clips: { name: string; duration?: number | null }[]) {
   return clips.map((c) => ({ name: c.name, start: 0, end: c.duration && c.duration > 0 ? c.duration : UNKNOWN }));

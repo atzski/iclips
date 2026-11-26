@@ -44,9 +44,9 @@ export async function makeThumb(src: string): Promise<{ jpeg: string; duration: 
 
 /**
  * Bande d'images d'un clip pour la coupe : `count` images de 160 × 90 prises à intervalles
- * réguliers, livrées une à une. S'arrête dès que `cancelled()` le dit.
+ * réguliers (sur tout le clip, ou sur `range`), livrées une à une. S'arrête dès que `cancelled()` le dit.
  */
-export async function filmstrip(src: string, count: number, onFrame: (i: number, url: string) => void, cancelled: () => boolean): Promise<void> {
+export async function filmstrip(src: string, count: number, onFrame: (i: number, url: string) => void, cancelled: () => boolean, range?: { start: number; end: number }): Promise<void> {
   const v = document.createElement("video");
   v.muted = true;
   v.preload = "auto";
@@ -65,7 +65,9 @@ export async function filmstrip(src: string, count: number, onFrame: (i: number,
     const { sx, sy, sw, sh } = cover(v.videoWidth, v.videoHeight, 160, 90);
     for (let i = 0; i < count && !cancelled(); i++) {
       const seeked = once("seeked");
-      v.currentTime = ((i + 0.5) / count) * v.duration;
+      // bande d'une partie du clip seulement (coupe zoomée, Studio 0.9)
+      const [from, to] = range ? [range.start, Math.min(range.end, v.duration)] : [0, v.duration];
+      v.currentTime = from + ((i + 0.5) / count) * (to - from);
       await seeked;
       if (cancelled()) break;
       ctx.drawImage(v, sx, sy, sw, sh, 0, 0, 160, 90);
