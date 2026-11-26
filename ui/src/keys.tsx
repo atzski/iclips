@@ -60,7 +60,7 @@ export function groups(overlayKeys: string | null | undefined): Group[] {
     ] },
     { title: t("Lecteur"), icon: "cut", tone: "orange", items: [
       [t("Espace") + " · K", t("Lecture, pause")],
-      ["J · L", t("Reculer, avancer d’une seconde")],
+      ["J · L", t("Reculer, avancer de 5 secondes")],
       [", · .", t("Image précédente, suivante")],
       ["- · +", t("Vitesse (ralenti jusqu’à 0,25×)")],
       [t("Entrée"), t("Plein écran")],

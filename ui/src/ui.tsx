@@ -135,6 +135,19 @@ const PATHS = {
   ),
   stepBack: <path d="M16.5 6v12M13 6.5 7 12l6 5.5" />,
   stepFwd: <path d="M7.5 6v12M11 6.5l6 5.5-6 5.5" />,
+  // reculer, avancer de 5 s : flèche en arc (le chiffre est posé par-dessus, Playback.tsx)
+  rewind: (
+    <>
+      <path d="M5.2 13.5A7 7 0 1 0 7.4 6.6" />
+      <path d="M7.8 3.2 7.2 6.9l3.7.6" />
+    </>
+  ),
+  forward: (
+    <>
+      <path d="M18.8 13.5A7 7 0 1 1 16.6 6.6" />
+      <path d="M16.2 3.2l.6 3.7-3.7.6" />
+    </>
+  ),
 };
 export type IconName = keyof typeof PATHS;
 

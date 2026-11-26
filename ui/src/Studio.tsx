@@ -28,7 +28,7 @@ import { SoundMix } from "./Sound";
 import { ClipMenu } from "./Menu";
 import { useQuietVoice } from "./quiet";
 import { useLiveMix } from "./mix";
-import { exitFullscreen, frameStep, isFullscreen, nextSpeed, Playback, toggle as playPause, toggleFullscreen } from "./Playback";
+import { exitFullscreen, frameStep, isFullscreen, nextSpeed, Playback, seekBy, SKIP, toggle as playPause, toggleFullscreen } from "./Playback";
 import { hint, KeysSheet, useKeys } from "./keys";
 import { byDate, duration, size, when } from "./format";
 import { t } from "./i18n";
@@ -53,6 +53,8 @@ const isImage = (c: Clip) => c.kind === "gif" || c.kind === "image";
 
 /** Largeur mini des vignettes : petites, moyennes, grandes (+ et -). */
 const GRID = ["12.5rem", "17rem", "24rem"] as const;
+/** Hauteur de la zone des outils du lecteur : celle de Couper, l'outil le plus haut (l'image ne bouge pas d'un outil à l'autre). */
+const TOOL_HEIGHT = "15.5rem";
 const GRID_KEY = "iclips.studio.grid";
 function readGrid(): number { try { const n = Number(localStorage.getItem(GRID_KEY)); return n >= 0 && n < GRID.length && localStorage.getItem(GRID_KEY) !== null ? n : 1; } catch { return 1; } }
 function writeGrid(n: number) { try { localStorage.setItem(GRID_KEY, String(n)); } catch { /* sans stockage : non gardée */ } }
@@ -251,6 +253,15 @@ export function Studio() {
   }, [clips, open]);
 
   const go = (name: string) => { setConfirm(false); setSharing(false); setStartMode(null); setOpen(name); };
+  /** Supprime un clip ; s'il est dans le lecteur, le suivant prend sa place. */
+  const remove = (name: string) => {
+    if (open === name) {
+      const i = queue.findIndex((c) => c.name === name);
+      const after = queue[i + 1] ?? queue[i - 1] ?? null;
+      setOpen(after?.name ?? null);
+    }
+    void act("clips.delete", { name });
+  };
   const sharedClip = shareOf ? clips?.find((c) => c.name === shareOf) ?? null : null;
 
   return (
@@ -376,16 +387,13 @@ export function Studio() {
             onCopy={() => copy(current)}
             onDelete={() => {
               if (!confirm) { setConfirm(true); return; }
-              // le clip suivant prend sa place dans le lecteur
-              const i = queue.findIndex((c) => c.name === current.name);
-              const after = queue[i + 1] ?? queue[i - 1] ?? null;
               setConfirm(false);
-              setOpen(after?.name ?? null);
-              void act("clips.delete", { name: current.name });
+              remove(current.name);
             }}
+            onMenu={(name, x, y, from) => setMenu({ name, x, y, from })}
             onCancel={() => setConfirm(false)}
             busy={!!job}
-            keys={!auto && !settings && !help}
+            keys={!auto && !settings && !help && !menu && !shareOf}
             onRender={(kind, span, focus, replace) => trim(current, kind, span, focus, replace)}
             onMix={(gameVol, mic) => startRender({ kind: "mix", name: current.name, game: gameVol, mic }, t("Mixage du son…"))}
           />
@@ -393,7 +401,7 @@ export function Studio() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {sharedClip && !open && <ShareSheet clip={sharedClip} onClose={() => setShareOf(null)} onVertical={isImage(sharedClip) ? null : () => { setShareOf(null); setStartMode("vertical"); setOpen(sharedClip.name); }} />}
+        {sharedClip && <ShareSheet clip={sharedClip} onClose={() => setShareOf(null)} onVertical={isImage(sharedClip) ? null : () => { setShareOf(null); setStartMode("vertical"); setOpen(sharedClip.name); }} />}
       </AnimatePresence>
       <AnimatePresence>{auto && <AutoSheet onClose={() => setAuto(false)} />}</AnimatePresence>
       <AnimatePresence>{settings && <SettingsSheet focus={settings === "sound" ? "sound" : undefined} onClose={() => setSettings(false)} />}</AnimatePresence>
@@ -469,10 +477,11 @@ export function Studio() {
               clip={c}
               at={menu}
               onClose={closeMenu}
-              onOpen={() => { setMenu(null); setStartMode(null); setOpen(c.name); }}
-              onEdit={() => { setMenu(null); setStartMode("cut"); setOpen(c.name); }}
-              onDelete={() => { setMenu(null); void act("clips.delete", { name: c.name }); }}
-              onSelect={() => { setMenu(null); if (selected) { if (!selected.includes(c.name)) toggle(c.name); } else startSelect(c.name); }}
+              onOpen={() => { setMenu(null); go(c.name); }}
+              onEdit={() => { setMenu(null); go(c.name); setStartMode("cut"); }}
+              onDelete={() => { setMenu(null); remove(c.name); }}
+              // dans le lecteur, pas de sélection : elle se fait dans la galerie
+              onSelect={open ? undefined : () => { setMenu(null); if (selected) { if (!selected.includes(c.name)) toggle(c.name); } else startSelect(c.name); }}
               onFavorite={() => { setMenu(null); quick(c, "favorite"); }}
               onCopy={() => { setMenu(null); copy(c); }}
               onShare={() => { setMenu(null); setShareOf(c.name); }}
@@ -512,6 +521,27 @@ function GridSize({ value, onChange }: { value: number; onChange: (n: number) =>
   );
 }
 
+/**
+ * Menu d'un clip (cartes de la galerie, liste du lecteur) : clic droit au pointeur ; touche Menu,
+ * Maj+F10 ou manette (Y, Menu) au centre de l'élément.
+ */
+function menuHandlers(onMenu: (x: number, y: number, from: HTMLElement) => void) {
+  return {
+    onContextMenu: (e: React.MouseEvent<HTMLElement>) => {
+      e.preventDefault();
+      const el = e.currentTarget;
+      const r = el.getBoundingClientRect();
+      const pointer = e.button === 2 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+      el.focus();
+      onMenu(pointer ? e.clientX : r.left + r.width / 2, pointer ? e.clientY : r.top + r.height / 2, el);
+    },
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+      // touche Menu ou Maj+F10 : Windows ne l'envoie pas toujours comme un clic droit
+      if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) { e.preventDefault(); openMenu(e.currentTarget); }
+    },
+  };
+}
+
 function Card({ clip: c, order, check, quick, onOpen, onMenu, onQuick }: {
   clip: Clip; order: number; check: boolean | null; quick: boolean;
   onOpen: (e: React.MouseEvent) => void; onMenu: (x: number, y: number, from: HTMLElement) => void; onQuick: (what: Quick) => void;
@@ -543,19 +573,7 @@ function Card({ clip: c, order, check, quick, onOpen, onMenu, onQuick }: {
   return (
     <div className="ibox-card group relative" onPointerEnter={enter} onPointerLeave={leave}>
       <button type="button" data-nav data-card={c.name} draggable aria-haspopup="menu" aria-pressed={check ?? undefined} onDragStart={(e) => dragOut(e, c)} onClick={onOpen}
-        onContextMenu={(e) => {
-          // clic droit : au pointeur ; touche Menu, Maj+F10 ou manette (Y, Menu) : au centre de la carte
-          e.preventDefault();
-          const el = e.currentTarget;
-          const r = el.getBoundingClientRect();
-          const pointer = e.button === 2 && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-          el.focus();
-          onMenu(pointer ? e.clientX : r.left + r.width / 2, pointer ? e.clientY : r.top + r.height / 2, el);
-        }}
-        onKeyDown={(e) => {
-          // touche Menu ou Maj+F10 : Windows ne l'envoie pas toujours comme un clic droit
-          if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) { e.preventDefault(); openMenu(e.currentTarget); }
-        }}
+        {...menuHandlers(onMenu)}
         className={`tone-${kindTone(c)} ibox-tile relative block w-full overflow-hidden rounded-xl text-left transition-transform duration-200 ${check ? "scale-[0.97] shadow-[0_0_0_3px_var(--accent)]" : ""}`}>
         <div className="relative aspect-video bg-cream-deep">
           {/* première image du clip, sans le son : rien ne joue avant l'ouverture */}
@@ -582,7 +600,8 @@ function Card({ clip: c, order, check, quick, onOpen, onMenu, onQuick }: {
             <span className="grid h-14 w-14 scale-75 place-items-center rounded-full bg-[var(--tone)] text-[#fff] shadow-[0_8px_24px_-6px_var(--tone)] transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover:scale-100 group-focus-within:scale-100"><Icon name={isImage(c) ? "camera" : "play"} size="1.5em" /></span>
           </span>
           {length > 0 && <span className="absolute right-2 bottom-2 z-[1] rounded-full bg-black/60 px-2 py-0.5 text-[0.75rem] font-extrabold text-[#fff]">{duration(length)}</span>}
-          {c.favorite && <span className="tone-yellow absolute top-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-[var(--tone)] text-[var(--tone-on)] shadow-md" aria-label={t("Favori")}><Icon name="star" filled size="1.05em" /></span>}
+          {/* au survol, l'étoile des actions rapides prend le relais : une seule étoile visible */}
+          {c.favorite && <span className={`tone-yellow absolute top-2 left-2 grid h-8 w-8 place-items-center rounded-full bg-[var(--tone)] text-[var(--tone-on)] shadow-md transition-opacity duration-150 ${quick ? "group-hover:opacity-0" : ""}`} aria-label={t("Favori")}><Icon name="star" filled size="1.05em" /></span>}
           {check === null && c.kind !== "video" && c.kind && (
             <span className={`absolute top-2 right-2 rounded-full bg-[var(--tone)] px-2.5 py-0.5 text-[0.72rem] font-extrabold tracking-wide text-[var(--tone-on)] uppercase shadow-md transition-opacity ${quick ? "group-hover:opacity-0" : ""}`}>{c.kind === "gif" ? "GIF" : t("Capture")}</span>
           )}
@@ -690,6 +709,8 @@ function MontageStrip({ clips, busy, onReorder, onRemove, onJoin, onCancel }: {
 
 type PlayerProps = {
   clip: Clip; queue: Clip[]; onGo: (name: string) => void; speed: number; onSpeed: (s: number) => void;
+  /** Menu d'un clip de la liste (clic droit), le même que dans la galerie. */
+  onMenu: (name: string, x: number, y: number, from: HTMLElement) => void;
   startMode: "cut" | "vertical" | null; onSettings: () => void;
   confirm: boolean; onClose: () => void; onTitle: (t: string) => void; onFavorite: () => void; onCopy: () => void; onDelete: () => void; onCancel: () => void;
   busy: boolean; keys: boolean; sharing: boolean; setSharing: (v: boolean) => void;
@@ -706,13 +727,12 @@ function Player(props: PlayerProps) {
   );
 }
 
-function PlayerBody({ clip: c, queue, onGo, speed, onSpeed, confirm, onClose, onTitle, onFavorite, onCopy, onDelete, onCancel, busy, keys, sharing, setSharing, onRender, onMix, startMode, onSettings }: PlayerProps) {
+function PlayerBody({ clip: c, queue, onGo, onMenu, speed, onSpeed, confirm, onClose, onTitle, onFavorite, onCopy, onDelete, onCancel, busy, keys, sharing, setSharing, onRender, onMix, startMode, onSettings }: PlayerProps) {
   const [title, setTitle] = useState(c.title ?? "");
   const [failed, setFailed] = useState(false);
   /** Couper, ou format vertical (cadre 9:16 à placer sur l'image). */
   const [mode, setMode] = useState<"cut" | "vertical" | "sound" | null>(isImage(c) ? null : startMode);
   /** Outil déplié : le masque de l'animation tombe (les bulles dépassent du panneau). */
-  const [settled, setSettled] = useState(false);
   const [focus, setFocus] = useState(0.5);
   /** Vidéo déjà verticale (ou carrée) : pas de format vertical à en tirer. */
   const [portrait, setPortrait] = useState(false);
@@ -738,8 +758,8 @@ function PlayerBody({ clip: c, queue, onGo, speed, onSpeed, confirm, onClose, on
     const v = video.current;
     switch (k) {
       case "space": case "k": playPause(v); return true;
-      case "j": if (v) v.currentTime = Math.max(0, v.currentTime - 1); return true;
-      case "l": if (v) v.currentTime = Math.min(v.duration || 0, v.currentTime + 1); return true;
+      case "j": seekBy(v, -SKIP); return true;
+      case "l": seekBy(v, SKIP); return true;
       case ",": frameStep(v, -1); return true;
       case ".": frameStep(v, 1); return true;
       case "-": onSpeed(nextSpeed(speed, -1)); return true;
@@ -849,25 +869,29 @@ function PlayerBody({ clip: c, queue, onGo, speed, onSpeed, confirm, onClose, on
             )}
             <span className="min-w-0 flex-1 truncate text-[0.82rem] font-semibold text-ink-soft">{[c.game, when(c.at), length > 0 && media ? duration(length) : null, size(c.size), c.auto ? autoLabel(c.auto) : null].filter(Boolean).join(" · ")}</span>
             <AnimatePresence>{note && <motion.span role="status" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={SPRING.snappy} className="text-[0.82rem] font-bold text-accent-text">{note}</motion.span>}</AnimatePresence>
-            <span className="shrink-0 text-[0.8rem] font-semibold text-ink-faint">{t("? : raccourcis")}</span>
           </div>
-          <AnimatePresence initial={false} mode="wait">
-            {mode && (
-              <motion.div key={mode} className={`shrink-0 rounded-xl bg-white shadow-sm ${settled ? "" : "overflow-hidden"}`}
-                onAnimationStart={() => setSettled(false)} onAnimationComplete={() => setSettled(true)}
-                initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0, transition: { duration: 0.16 } }}
-                transition={{ height: SPRING.smooth, opacity: { duration: 0.2 } }}>
-                {mode === "sound" ? (
-                  <SoundMix clip={c} game={mix.game} mic={mix.mic} onChange={setMix} busy={busy} onMix={onMix} onSettings={onSettings} />
-                ) : (
-                  <Trim video={video} src={src} length={length} busy={busy} vertical={mode === "vertical"} onRender={(kind, span, replace) => onRender(kind, span, focus, replace)} />
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* zone des outils : toujours là et de hauteur fixe, l'image ne bouge pas quand on change
+              d'outil ; seul le contenu passe de l'un à l'autre en fondu */}
+          {media && (
+            <div className="relative shrink-0 rounded-xl bg-white shadow-sm" style={{ minHeight: TOOL_HEIGHT }}>
+              <AnimatePresence initial={false} mode="popLayout">
+                <motion.div key={mode ?? "none"} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.12, ease: "easeOut" }}>
+                  {mode === "sound" ? (
+                    <SoundMix clip={c} game={mix.game} mic={mix.mic} onChange={setMix} busy={busy} onMix={onMix} onSettings={onSettings} />
+                  ) : mode ? (
+                    <Trim video={video} src={src} length={length} busy={busy} vertical={mode === "vertical"} onRender={(kind, span, replace) => onRender(kind, span, focus, replace)} />
+                  ) : (
+                    <div className="grid place-items-center px-6 text-center" style={{ minHeight: TOOL_HEIGHT }}>
+                      <p className="max-w-[34rem] text-[0.88rem] font-semibold text-ink-faint">{t("Choisissez un outil : Couper (C) pour garder un passage ou en faire un GIF, Vertical (V) pour TikTok et Shorts, Son (S) pour régler le jeu et le micro.")}</p>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          )}
         </div>
 
-        {queue.length > 1 && <Queue queue={queue} current={c.name} onGo={onGo} />}
+        {queue.length > 1 && <Queue queue={queue} current={c.name} onGo={onGo} onMenu={onMenu} />}
       </div>
       <AnimatePresence>
         {sharing && <ShareSheet clip={c} onClose={() => setSharing(false)} onVertical={isImage(c) || portrait ? null : () => { setSharing(false); setMode("vertical"); }} />}
@@ -877,7 +901,7 @@ function PlayerBody({ clip: c, queue, onGo, speed, onSpeed, confirm, onClose, on
 }
 
 /** Liste des clips à droite du lecteur : le clip vu en avant, un clic pour passer à un autre. */
-function Queue({ queue, current, onGo }: { queue: Clip[]; current: string; onGo: (name: string) => void }) {
+function Queue({ queue, current, onGo, onMenu }: { queue: Clip[]; current: string; onGo: (name: string) => void; onMenu: (name: string, x: number, y: number, from: HTMLElement) => void }) {
   const list = useRef<HTMLDivElement>(null);
   useEffect(() => {
     list.current?.querySelector<HTMLElement>("[aria-current=true]")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -890,7 +914,7 @@ function Queue({ queue, current, onGo }: { queue: Clip[]; current: string; onGo:
           const on = c.name === current;
           const pic = isImage(c) ? clipUrl(c) : thumbUrl(c);
           return (
-            <button key={c.name} type="button" data-nav aria-current={on} onClick={() => !on && onGo(c.name)}
+            <button key={c.name} type="button" data-nav aria-current={on} aria-haspopup="menu" onClick={() => !on && onGo(c.name)} {...menuHandlers((x, y, from) => onMenu(c.name, x, y, from))}
               className={`group/q relative flex items-center gap-3 rounded-lg p-1.5 text-left transition-colors ${on ? "bg-accent-soft" : "hover:bg-cream-deep/70"}`}>
               {on && <motion.span layoutId="queue-on" className="absolute inset-y-2 left-0 w-1 rounded-full bg-accent" transition={SPRING.snappy} />}
               <span className="relative aspect-video w-24 shrink-0 overflow-hidden rounded-md bg-cream-deep">

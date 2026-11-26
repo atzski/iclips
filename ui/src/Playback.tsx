@@ -34,6 +34,16 @@ export function toggle(v: HTMLVideoElement | null) {
   else v.pause();
 }
 
+/** Saut des boutons de la barre et de J, L (secondes). */
+export const SKIP = 5;
+
+/** Recule ou avance de `seconds`, sans sortir du clip. */
+export function seekBy(v: HTMLVideoElement | null, seconds: number) {
+  if (!v) return;
+  const end = Number.isFinite(v.duration) ? v.duration : v.currentTime + Math.max(0, seconds);
+  v.currentTime = Math.min(end, Math.max(0, v.currentTime + seconds));
+}
+
 /** Images par seconde mesurées pendant la lecture (30 ou 60 selon la qualité des clips). */
 const rates = new WeakMap<HTMLVideoElement, number>();
 
@@ -49,23 +59,47 @@ export function frameStep(v: HTMLVideoElement | null, dir: -1 | 1) {
 /**
  * Plein écran du lecteur : l'élément (vidéo et commandes) couvre la fenêtre (`ibox-theater`,
  * styles.css), et la page passe en plein écran quand la WebView le permet. Échap en sort.
+ * L'image glisse de sa place jusqu'aux bords de la fenêtre, et y revient en sortant (ressort
+ * court, sans déformer l'image : ce sont ses bords qui bougent, la vidéo reste « contain »).
  */
 let theater: HTMLElement | null = null;
 const watchers = new Set<() => void>();
 export const isFullscreen = () => theater !== null;
+const GROW = { duration: 420, easing: "cubic-bezier(0.22, 1, 0.36, 1)" };
+const SHRINK = { duration: 320, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
+const calm = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** Cadre d'un élément, en position fixe dans la fenêtre. */
+const frame = (r: DOMRect, radius: string) => ({ top: `${r.top}px`, left: `${r.left}px`, width: `${r.width}px`, height: `${r.height}px`, borderRadius: radius });
+const FULL = { top: "0px", left: "0px", width: "100%", height: "100%", borderRadius: "0px" };
+
 export function exitFullscreen() {
-  if (!theater) return;
-  theater.classList.remove("ibox-theater");
+  const el = theater;
+  if (!el) return;
   theater = null;
   watchers.forEach((w) => w());
   if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  if (calm() || !el.isConnected) { el.classList.remove("ibox-theater"); return; }
+  // la place d'arrivée : mesurée sans le plein écran, puis l'image y redescend
+  el.classList.remove("ibox-theater");
+  const home = el.getBoundingClientRect();
+  const radius = getComputedStyle(el).borderTopLeftRadius;
+  el.classList.add("ibox-theater");
+  // la dernière image reste tenue jusqu'au retrait de la classe : pas d'image pleine fenêtre en trop
+  const anim = el.animate([FULL, frame(home, radius)], { ...SHRINK, fill: "forwards" });
+  const done = () => { if (theater !== el) { el.classList.remove("ibox-theater"); anim.cancel(); } };
+  anim.finished.then(done, done);
 }
+
 export function toggleFullscreen(el: HTMLElement | null) {
   if (theater) { exitFullscreen(); return; }
   if (!el) return;
+  const from = el.getBoundingClientRect();
+  const radius = getComputedStyle(el).borderTopLeftRadius;
+  el.getAnimations().forEach((a) => a.cancel());
   theater = el;
   el.classList.add("ibox-theater");
   watchers.forEach((w) => w());
+  if (!calm()) el.animate([frame(from, radius), FULL], GROW);
   void document.documentElement.requestFullscreen?.().catch(() => {});
 }
 // plein écran natif quitté (Échap, F11) : le lecteur reprend sa place
@@ -212,8 +246,8 @@ export function Playback({ video, length, bar = true, speed = 1, onSpeed, stage 
           {onSpeed ? (
             <div className="flex items-center gap-1 text-[#fff]">
               <BarButton icon={paused ? "play" : "pause"} label={hint(paused ? t("Lire") : t("Pause"), t("Espace"))} onClick={() => toggle(video.current)} />
-              <BarButton icon="stepBack" label={hint(t("Image précédente"), ",")} onClick={() => frameStep(video.current, -1)} />
-              <BarButton icon="stepFwd" label={hint(t("Image suivante"), ".")} onClick={() => frameStep(video.current, 1)} />
+              <BarButton icon="rewind" badge={String(SKIP)} label={hint(t("Reculer de 5 secondes"), "J")} onClick={() => seekBy(video.current, -SKIP)} />
+              <BarButton icon="forward" badge={String(SKIP)} label={hint(t("Avancer de 5 secondes"), "L")} onClick={() => seekBy(video.current, SKIP)} />
               <span className="ml-1.5 text-[0.82rem] font-bold tabular-nums text-[#fff]/90">{duration(now) || "0:00"} / {duration(len)}</span>
               <span className="flex-1" />
               <div className="relative">
@@ -246,11 +280,12 @@ export function Playback({ video, length, bar = true, speed = 1, onSpeed, stage 
   );
 }
 
-function BarButton({ icon, label, onClick }: { icon: IconName; label: string; onClick: () => void }) {
+function BarButton({ icon, label, onClick, badge }: { icon: IconName; label: string; onClick: () => void; badge?: string }) {
   return (
     <button type="button" title={label} aria-label={label} onClick={onClick}
-      className="grid h-8 w-8 place-items-center rounded-full transition-[background-color,transform] duration-150 hover:bg-[#fff]/15 active:scale-90">
-      <Icon name={icon} size="1.15em" />
+      className="relative grid h-8 w-8 place-items-center rounded-full transition-[background-color,transform] duration-150 hover:bg-[#fff]/15 active:scale-90">
+      <Icon name={icon} size={badge ? "1.4em" : "1.15em"} />
+      {badge && <span aria-hidden="true" className="absolute inset-0 grid place-items-center pt-[3px] text-[0.58rem] leading-none font-extrabold">{badge}</span>}
     </button>
   );
 }

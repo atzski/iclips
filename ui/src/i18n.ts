@@ -325,6 +325,10 @@ const EN: Record<string, string> = {
   "Couper le clip": "Cut the clip",
   "Clip coupé : il remplace l’original.": "Clip cut: it replaces the original.",
   "L’original n’a pas pu être effacé : {0}": "The original could not be erased: {0}",
+  "Reculer de 5 secondes": "Back 5 seconds",
+  "Avancer de 5 secondes": "Forward 5 seconds",
+  "Reculer, avancer de 5 secondes": "Back, forward 5 seconds",
+  "Choisissez un outil : Couper (C) pour garder un passage ou en faire un GIF, Vertical (V) pour TikTok et Shorts, Son (S) pour régler le jeu et le micro.": "Pick a tool: Trim (C) to keep a passage or make a GIF, Vertical (V) for TikTok and Shorts, Sound (S) to set the game and the mic.",
 };
 
 export const lang: "fr" | "en" = typeof location !== "undefined" && new URLSearchParams(location.search).get("lang") === "en" ? "en" : "fr";

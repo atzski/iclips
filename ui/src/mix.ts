@@ -26,6 +26,14 @@ export function sources(src: string, tracks: string[] | undefined): { key: "game
   return separate.length ? separate.map((k) => ({ key: k, url: trackUrl(src, k) })) : [{ key: "game", url: src }];
 }
 
+/**
+ * Volume de la vidéo quand ses sons à part ne jouent pas (pistes absentes) : le son du clip
+ * mélange jeu et micro, il suit la plus forte des deux barres, 100 % au plus.
+ */
+export function fallbackVolume(volumes: { game: number; mic: number }): number {
+  return Math.min(1, Math.max(0, volumes.game, volumes.mic));
+}
+
 /** Un son a-t-il dérivé de la vidéo au point d'être recalé ? */
 export function drifted(sound: number, video: number): boolean {
   return Math.abs(sound - video) > DRIFT;
@@ -39,6 +47,8 @@ export function useLiveMix(video: RefObject<HTMLVideoElement | null>, src: strin
   const gains = useRef<Map<string, { node?: GainNode; el: HTMLAudioElement }>>(new Map());
   const wanted = useRef(volumes);
   wanted.current = volumes;
+  /** Applique les volumes voulus (sons à part, ou la vidéo quand ils ne jouent pas). */
+  const applyRef = useRef<() => void>(() => {});
   const key = `${src}|${(tracks ?? []).join(",")}`;
 
   useEffect(() => {
@@ -62,17 +72,21 @@ export function useLiveMix(video: RefObject<HTMLVideoElement | null>, src: strin
     let broken = false;
     const level = (k: string) => (k === "mic" ? wanted.current.mic : wanted.current.game);
     const apply = () => {
+      // sons injouables : la vidéo garde son propre son, à ce volume (100 % au plus)
+      if (broken) { v.volume = fallbackVolume(wanted.current); return; }
       for (const { k, el, entry } of els) {
         if (entry.node) entry.node.gain.value = level(k);
         else el.volume = Math.min(1, level(k));
       }
     };
+    applyRef.current = apply;
     const fallBack = () => {
       if (broken) return;
       broken = true;
       live = false;
       for (const { el } of els) el.pause();
       v.muted = false;
+      apply();
     };
     const route = () => {
       if (!ctx || ctx.state !== "running") return;
@@ -130,7 +144,9 @@ export function useLiveMix(video: RefObject<HTMLVideoElement | null>, src: strin
       for (const s of stops) s();
       for (const { el } of els) { el.removeEventListener("error", fallBack); el.pause(); el.removeAttribute("src"); el.load(); el.remove(); }
       gains.current.clear();
+      applyRef.current = () => {};
       v.muted = false;
+      v.volume = 1;
       void ctx?.close();
     };
     // `key` résume src et tracks
@@ -138,11 +154,5 @@ export function useLiveMix(video: RefObject<HTMLVideoElement | null>, src: strin
   }, [video, key]);
 
   // volume changé : appliqué tout de suite, sans recréer les sons
-  useEffect(() => {
-    for (const [k, { node, el }] of gains.current) {
-      const g = k === "mic" ? volumes.mic : volumes.game;
-      if (node) node.gain.value = g;
-      else el.volume = Math.min(1, g);
-    }
-  }, [volumes.game, volumes.mic]);
+  useEffect(() => applyRef.current(), [volumes.game, volumes.mic]);
 }
