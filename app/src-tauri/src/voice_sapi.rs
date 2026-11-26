@@ -29,21 +29,22 @@ pub fn same_device(sapi: &str, endpoint: &str) -> bool {
 /// ce que le moteur entend (musique, sonneries, dialogues d'un jeu) sous « Clip ça ! » en
 /// confiance « normale », score 0,5 à 0,77 : la boucle de clips de la 1.0.10. Avec la dictée
 /// concurrente (`rival`), ces sons partent en dictée et la phrase dite au micro sort en « normale »
-/// (0,57 à 0,78 mesuré sur une vraie voix), acceptée aussitôt, ou en « faible » (0,45 et 0,46, la
-/// même voix) : une phrase ordinaire sur sept tombe aussi là (0,47, dialogue de jeu), donc une
-/// « faible » n'est acceptée que répétée (`faint`, deux en moins de 5 s : le joueur qui insiste).
+/// (0,57 à 0,88 dans le journal d'un vrai joueur en partie), acceptée aussitôt, ou en « faible »
+/// (0,38 à 0,46, la même voix). Jugé trop strict quand une « faible » devait être répétée : elle
+/// passe maintenant dès 0,42 (une phrase de dialogue sur sept, en essai, tombe à 0,47 : le
+/// garde-fou de 3 clips en 90 s borne ce risque), et de 0,30 à 0,42 si elle est répétée (`faint`).
 /// Sans dictée (moteur qui ne la propose pas) : « haute » et score 0,8, seuil seul.
 pub fn accepted(confidence: i8, engine: f32, rival: bool) -> bool {
     if rival {
-        confidence >= 0
+        confidence >= 0 || engine >= 0.42
     } else {
         confidence >= 1 && engine >= 0.8
     }
 }
 
-/// « Faible » mais plausible : comptée pour la répétition (voir `accepted`).
+/// « Faible » et en dessous du seuil, mais plausible : comptée pour la répétition (voir `accepted`).
 pub fn faint(confidence: i8, engine: f32, rival: bool) -> bool {
-    rival && confidence < 0 && engine >= 0.40
+    rival && confidence < 0 && engine >= 0.30
 }
 
 /// Deux « faibles » à moins de 5 s : la seconde est acceptée.
@@ -311,8 +312,9 @@ mod tests {
         assert_eq!(sapi_language("en-US")[0], "409");
         assert!(accepted(1, 0.90, false) && !accepted(0, 0.77, false) && !accepted(1, 0.6, false) && !accepted(-1, 0.9, false));
         // avec la dictée : normale aussitôt ; faible dès 0,40 (vraie voix : 0,45) seulement répétée
-        assert!(accepted(0, 0.3, true) && !accepted(-1, 0.445, true));
-        assert!(faint(-1, 0.445, true) && !faint(-1, 0.376, true) && !faint(0, 0.6, true) && !faint(-1, 0.9, false));
+        // journal d'un vrai joueur : 0,46 en « faible » passe aussitôt, 0,38 compte pour la répétition
+        assert!(accepted(0, 0.3, true) && accepted(-1, 0.46, true) && !accepted(-1, 0.38, true));
+        assert!(faint(-1, 0.38, true) && !faint(-1, 0.25, true) && !faint(0, 0.6, true) && !faint(-1, 0.9, false));
         for yes in ["Clip ça !", "clip sa", "Clic ça", "clips ça", "Clippe ça.", "ok clip ça"] {
             assert!(dictated(yes), "{yes}");
         }
@@ -361,9 +363,11 @@ mod tests {
             }
             drop(l);
             let n = count.load(Ordering::Relaxed);
-            let yes = f.file_name().unwrap().to_string_lossy().starts_with("oui");
+            let name = f.file_name().unwrap().to_string_lossy().into_owned();
+            let yes = name.starts_with("oui");
             println!("  => {n} déclenchement(s)");
-            if (n > 0) != yes { wrong.push(f.file_name().unwrap().to_string_lossy().into_owned()); }
+            // `tolere…` : faux déclenchement accepté en connaissance de cause (voir `accepted`)
+            if (n > 0) != yes && !name.starts_with("tolere") { wrong.push(name); }
         }
         assert!(wrong.is_empty(), "mal classés : {wrong:?}");
     }
