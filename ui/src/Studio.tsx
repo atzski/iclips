@@ -18,6 +18,8 @@ import { SettingsSheet } from "./Settings";
 import { SoundMix } from "./Sound";
 import { ClipMenu } from "./Menu";
 import { useQuietVoice } from "./quiet";
+import { useLiveMix } from "./mix";
+import { Playback, toggle as playPause } from "./Playback";
 import { hint, KeysSheet, useKeys } from "./keys";
 import { duration, size, when } from "./format";
 import { t } from "./i18n";
@@ -493,6 +495,9 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
   const video = useRef<HTMLVideoElement>(null);
   // le son du clip rejoué ne doit pas déclencher « Clip ça ! » (quiet.ts)
   useQuietVoice(video, failed);
+  // volumes du panneau Son, entendus pendant la lecture (mix.ts)
+  const [mix, setMix] = useState({ game: 1, mic: 1 });
+  useLiveMix(video, isImage(c) || failed ? "" : clipUrl(c), c.tracks, mix);
   const back = useRef<HTMLButtonElement>(null);
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => { if (!note) return; const id = setTimeout(() => setNote(null), 3000); return () => clearTimeout(id); }, [note]);
@@ -502,7 +507,7 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
     const v = video.current;
     const media = !isImage(c);
     switch (k) {
-      case "space": if (v) { if (v.paused) void v.play(); else v.pause(); } return true;
+      case "space": playPause(v); return true;
       case "j": if (v) v.currentTime = Math.max(0, v.currentTime - 1); return true;
       case "l": if (v) v.currentTime = Math.min(v.duration || 0, v.currentTime + 1); return true;
       case "c": if (media) toggle("cut"); return true;
@@ -523,13 +528,13 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
   return (
     <motion.div data-nav-scope className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <motion.div role="dialog" aria-modal="true" aria-label={label(c)} className="flex max-h-full w-full max-w-[min(78rem,100%)] flex-col overflow-hidden rounded-xl bg-white shadow-lg" initial={{ scale: 0.96, y: 12 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.97, y: 8, transition: { duration: 0.15 } }} transition={SPRING.smooth}>
-        <div className="relative min-h-0 flex-1 bg-black">
+        <div className="group/player relative min-h-0 flex-1 bg-black">
           {src && isImage(c) ? (
             <img src={src} alt="" className="mx-auto max-h-[60vh] object-contain" />
           ) : src && !failed ? (
             <>
-              <video ref={video} src={src} controls={mode !== "vertical"} autoPlay playsInline draggable onDragStart={(e) => dragOut(e, c)} onError={() => setFailed(true)} onLoadedMetadata={(e) => { const v = e.currentTarget; setLength(v.duration); setPortrait(v.videoWidth > 0 && v.videoWidth * 16 <= v.videoHeight * 9 + 16); }} className="max-h-[60vh] w-full bg-black object-contain" />
-              {mode === "vertical" && <Vertical video={video} focus={focus} onFocus={setFocus} />}
+              <video ref={video} src={src} autoPlay onClick={mode === "vertical" ? undefined : () => playPause(video.current)} playsInline draggable onDragStart={(e) => dragOut(e, c)} onError={() => setFailed(true)} onLoadedMetadata={(e) => { const v = e.currentTarget; setLength(v.duration); setPortrait(v.videoWidth > 0 && v.videoWidth * 16 <= v.videoHeight * 9 + 16); }} className={`max-h-[60vh] w-full bg-black object-contain ${mode === "vertical" ? "" : "cursor-pointer"}`} />
+              {mode === "vertical" ? <Vertical video={video} focus={focus} onFocus={setFocus} /> : <Playback video={video} length={length} bar={mode !== "cut"} />}
             </>
           ) : (
             <div className="grid aspect-video place-items-center text-[0.95rem] font-bold text-[#fff]/70">{src ? t("Lecture impossible.") : c.game ?? ""}</div>
@@ -571,7 +576,7 @@ function Player({ clip: c, confirm, onClose, onTitle, onFavorite, onDelete, onCa
               initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0, transition: { duration: 0.16 } }}
               transition={{ height: SPRING.smooth, opacity: { duration: 0.2 } }}>
               {mode === "sound" ? (
-                <SoundMix clip={c} video={video} busy={busy} onMix={onMix} onSettings={onSettings} />
+                <SoundMix clip={c} game={mix.game} mic={mix.mic} onChange={setMix} busy={busy} onMix={onMix} onSettings={onSettings} />
               ) : (
                 <Trim video={video} src={src} length={length} busy={busy} vertical={mode === "vertical"} onRender={(kind, span) => onRender(kind, span, focus)} />
               )}

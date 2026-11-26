@@ -86,7 +86,12 @@ pub fn handle(app: &AppHandle, webview_label: &str, req: &Request<Vec<u8>>) -> R
         return respond(StatusCode::OK, "application/json", out.to_string().into_bytes(), None);
     }
     if let Some(name) = file.strip_prefix("__clips/") {
-        let Some(path) = crate::capture::clip_path(app, name) else { return text(StatusCode::NOT_FOUND, "Clip introuvable.") };
+        // piste séparée d'un clip (`a.game.m4a`, `a.mic.m4a`) : le lecteur fait entendre les volumes
+        let path = match track_of(name) {
+            Some((clip, track)) => crate::capture::clip_path(app, &clip).map(|p| crate::clips::track_file(&p, track)).filter(|p| p.is_file()),
+            None => crate::capture::clip_path(app, name),
+        };
+        let Some(path) = path else { return text(StatusCode::NOT_FOUND, "Clip introuvable.") };
         let range = req.headers().get(header::RANGE).and_then(|v| v.to_str().ok());
         return clip(&path, range);
     }
@@ -137,6 +142,11 @@ pub fn byte_range(header: Option<&str>, len: u64) -> Option<(u64, u64)> {
     (start <= end && start < len).then(|| (start, end.min(start + CHUNK - 1)))
 }
 
+/// `a.game.m4a` → (`a.mp4`, `game`) ; seulement les pistes du jeu et du micro.
+pub fn track_of(name: &str) -> Option<(String, &'static str)> {
+    ["game", "mic"].into_iter().find_map(|t| name.strip_suffix(&format!(".{t}.m4a")).map(|stem| (format!("{stem}.mp4"), t)))
+}
+
 /// Sert un clip par morceaux (lecture et déplacement dans la vidéo).
 fn clip(path: &std::path::Path, range: Option<&str>) -> Response<Vec<u8>> {
     use std::io::{Read, Seek, SeekFrom};
@@ -151,7 +161,7 @@ fn clip(path: &std::path::Path, range: Option<&str>) -> Response<Vec<u8>> {
     }
     Response::builder()
         .status(StatusCode::PARTIAL_CONTENT)
-        .header(header::CONTENT_TYPE, match path.extension().and_then(|e| e.to_str()) { Some("gif") => "image/gif", Some("png") => "image/png", _ => "video/mp4" })
+        .header(header::CONTENT_TYPE, match path.extension().and_then(|e| e.to_str()) { Some("gif") => "image/gif", Some("png") => "image/png", Some("m4a") => "audio/mp4", _ => "video/mp4" })
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::CONTENT_RANGE, format!("bytes {start}-{end}/{len}"))
         .header("X-Content-Type-Options", "nosniff")
@@ -181,6 +191,16 @@ fn percent_decode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pistes_du_jeu_et_du_micro() {
+        assert_eq!(track_of("a-1.game.m4a"), Some(("a-1.mp4".into(), "game")));
+        assert_eq!(track_of("a-1.mic.m4a"), Some(("a-1.mp4".into(), "mic")));
+        assert_eq!(track_of("a-1.mix.m4a"), None);
+        assert_eq!(track_of("a-1.mp4"), None);
+        // le nom du clip passe ensuite par `clip_path` (`valid_name` : pas de « .. » ni de « / »)
+        assert_eq!(track_of("../x.game.m4a").map(|(c, _)| crate::capture::valid_name(&c)), Some(false));
+    }
 
     #[test]
     fn paths_stay_inside_the_ui() {

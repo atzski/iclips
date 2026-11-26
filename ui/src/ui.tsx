@@ -5,6 +5,7 @@ const PATHS = {
   star: <path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" />,
   back: <path d="M14.5 5.5 8 12l6.5 6.5" />,
   play: <path d="M8 5.5v13l10-6.5z" fill="currentColor" />,
+  pause: <path d="M7.5 5.5h3v13h-3zM13.5 5.5h3v13h-3z" fill="currentColor" />,
   x: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   mic: (

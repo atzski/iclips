@@ -54,18 +54,22 @@ const EVENTS = ["play", "playing", "pause", "ended", "volumechange", "emptied"] 
 export function useQuietVoice(video: RefObject<HTMLMediaElement | null>, key?: unknown): void {
   useEffect(() => {
     const v = video.current;
-    if (!v) return;
-    const on = () => update(v);
-    for (const e of EVENTS) v.addEventListener(e, on);
-    on();
-    return () => {
-      for (const e of EVENTS) v.removeEventListener(e, on);
-      // lecteur fermé en pleine lecture : la voix revient tout de suite (après la grâce)
-      if (loud.delete(v) && loud.size === 0) {
-        window.clearInterval(timer);
-        timer = undefined;
-        ask(0);
-      }
-    };
+    return v ? watchQuiet(v) : undefined;
   }, [video, key]);
+}
+
+/** Même surveillance pour un son créé hors de React (pistes du lecteur, `mix.ts`). */
+export function watchQuiet(v: HTMLMediaElement): () => void {
+  const on = () => update(v);
+  for (const e of EVENTS) v.addEventListener(e, on);
+  on();
+  return () => {
+    for (const e of EVENTS) v.removeEventListener(e, on);
+    // lecteur fermé en pleine lecture : la voix revient tout de suite (après la grâce)
+    if (loud.delete(v) && loud.size === 0) {
+      window.clearInterval(timer);
+      timer = undefined;
+      ask(0);
+    }
+  };
 }

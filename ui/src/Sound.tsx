@@ -1,10 +1,10 @@
 /**
  * Son d'un clip, dans le lecteur (0.6) : volume du jeu et du micro quand le clip a ses pistes
- * séparées (Réglages › Pistes séparées), sinon un volume pour tout le son. iBox refait le son
- * dans un nouveau clip (`edit.render` `mix`) ; l'image ne change pas, l'original non plus.
+ * séparées (Réglages › Pistes séparées), sinon un volume pour tout le son. Le réglage s'entend
+ * tout de suite dans le lecteur (`mix.ts`, 0.8.8) ; « Créer avec ce son » refait le son dans un
+ * nouveau clip (`edit.render` `mix`) ; l'image ne change pas, l'original non plus.
  */
 import { motion } from "motion/react";
-import { useEffect, useState, type RefObject } from "react";
 import { SPRING } from "./ibox/motion";
 import type { Clip } from "./host";
 import { t } from "./i18n";
@@ -12,18 +12,14 @@ import { Button } from "./ui";
 import { Bars, Slider } from "./controls";
 import { Pill, type IconName, type Tone } from "./ui";
 
-export function SoundMix({ clip: c, video, busy, onMix, onSettings }: { clip: Clip; video: RefObject<HTMLVideoElement | null>; busy: boolean; onMix: (game: number, mic: number) => void; onSettings?: () => void }) {
+export function SoundMix({ clip: c, game, mic, onChange, busy, onMix, onSettings }: {
+  clip: Clip; game: number; mic: number; onChange: (v: { game: number; mic: number }) => void;
+  busy: boolean; onMix: (game: number, mic: number) => void; onSettings?: () => void;
+}) {
   const tracks = c.tracks ?? [];
   const separate = tracks.includes("game") || tracks.includes("mic");
-  const [game, setGame] = useState(1);
-  const [mic, setMic] = useState(1);
-  // sans pistes séparées, le lecteur fait entendre le réglage (jusqu'à 100 %)
-  useEffect(() => {
-    const v = video.current;
-    if (!v || separate) return;
-    v.volume = Math.min(1, game);
-    return () => { v.volume = 1; };
-  }, [game, separate, video]);
+  const setGame = (g: number) => onChange({ game: g, mic });
+  const setMic = (m: number) => onChange({ game, mic: m });
 
   const changed = game !== 1 || mic !== 1;
   return (
@@ -39,12 +35,12 @@ export function SoundMix({ clip: c, video, busy, onMix, onSettings }: { clip: Cl
       <div className="flex flex-wrap items-center gap-3">
         <p className="min-w-0 flex-1 text-[0.78rem] font-semibold text-ink-faint">
           {separate
-            ? t("Le lecteur joue le mélange d’origine : le nouveau s’entend dans le clip créé.")
+            ? t("Le lecteur fait entendre ces volumes ; « Créer avec ce son » les garde dans un nouveau clip.")
             : t("Ce clip n’a qu’une piste de son. Activez « Pistes séparées » dans Réglages : le jeu et le micro se régleront à part sur vos prochains clips.")}
         </p>
         {/* ce réglage ne vaut que pour ce clip : les volumes des prochains se règlent à la capture */}
         {onSettings && <Button tone="purple" variant="soft" icon="mic" onClick={onSettings}>{t("Volumes des prochains clips")}</Button>}
-        <Button tone="blue" variant="ghost" disabled={!changed} onClick={() => { setGame(1); setMic(1); }}>{t("Rétablir")}</Button>
+        <Button tone="blue" variant="ghost" disabled={!changed} onClick={() => onChange({ game: 1, mic: 1 })}>{t("Rétablir")}</Button>
         <Button tone="orange" variant="primary" icon="sound" disabled={busy || !changed} onClick={() => onMix(game, mic)}>{t("Créer avec ce son")}</Button>
       </div>
     </div>
