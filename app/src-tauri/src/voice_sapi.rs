@@ -28,34 +28,25 @@ pub fn same_device(sapi: &str, endpoint: &str) -> bool {
 /// Reconnaissance de la phrase acceptée. Seule, une grammaire de deux phrases range presque tout
 /// ce que le moteur entend (musique, sonneries, dialogues d'un jeu) sous « Clip ça ! » en
 /// confiance « normale », score 0,5 à 0,77 : la boucle de clips de la 1.0.10. Avec la dictée
-/// concurrente (`rival`), ces sons partent en dictée et la phrase dite au micro sort en « normale »
-/// (0,57 à 0,88 dans le journal d'un vrai joueur en partie), acceptée aussitôt, ou en « faible »
-/// (0,38 à 0,46, la même voix). Jugé trop strict quand une « faible » devait être répétée : elle
-/// passe maintenant dès 0,40 (une phrase de dialogue sur sept, en essai, tombe à 0,47 : le
-/// garde-fou borne ce risque), et de 0,30 à 0,40 si elle est répétée (`faint`).
-/// Sans dictée (moteur qui ne la propose pas) : « haute » et score 0,8, seuil seul.
+/// concurrente (`rival`), une partie de ces sons part en dictée, mais pas tout : avec de la
+/// musique ou un jeu dans les enceintes, le journal d'un vrai joueur montre des « phrases »
+/// toutes les quelques secondes sans qu'il parle, en confiance « normale », scores 0,54 à 0,68
+/// (et « faible » 0,36 à 0,49). Ses vraies phrases sortent en « haute » (0,82 à 0,90) ou en
+/// « normale » dès 0,70. Accepté : « haute » dès 0,75, « normale » dès 0,70, rien en « faible ».
+/// Les assouplissements des 1.0.13 à 1.0.18 (faible dès 0,40, répétition) laissaient passer ces
+/// sons : plus de faux clips que de phrases manquées. Sans dictée : « haute » et score 0,8.
 ///
-/// Durée (`ms`) : la limite de 1,6 s de la 1.0.17 refusait de vraies phrases (le journal du joueur
-/// montre sa voix de 0,37 à 2,9 s, dite fort ou traînée en pleine partie). Seul un son de plus de
-/// 3,5 s est écarté. Les rares faux clips restants sont bornés par le garde-fou (`clips_auto.rs`).
+/// Durée (`ms`) : sa voix va de 0,37 à 2,9 s (dite fort ou traînée) ; au-delà de 3 s, jamais.
 pub fn accepted(confidence: i8, engine: f32, rival: bool, ms: u32) -> bool {
-    if ms > 3_500 {
+    if ms > 3_000 {
         return false;
     }
     if rival {
-        confidence >= 0 || engine >= 0.40
+        (confidence >= 1 && engine >= 0.75) || (confidence == 0 && engine >= 0.70)
     } else {
         confidence >= 1 && engine >= 0.8
     }
 }
-
-/// « Faible » et en dessous du seuil, mais plausible : comptée pour la répétition (voir `accepted`).
-pub fn faint(confidence: i8, engine: f32, rival: bool, ms: u32) -> bool {
-    rival && confidence < 0 && engine >= 0.30 && ms <= 2_000
-}
-
-/// Deux « faibles » à moins de 5 s : la seconde est acceptée.
-pub const FAINT_PAIR_MS: u128 = 5_000;
 
 /// La dictée a-t-elle écrit la phrase ? Dite fort, au milieu du son d'un jeu, « Clip ça ! » part
 /// parfois en dictée (« clip ça », « clic ça », « clips ça », « clippe sa »…) au lieu de la grammaire.
@@ -235,7 +226,6 @@ mod imp {
             }
         };
         let _ = ready.send(Ok(()));
-        let mut last_faint: Option<std::time::Instant> = None;
         'outer: while !stop.load(Ordering::Relaxed) {
             let _ = ctx.WaitForNotifyEvent(250);
             loop {
@@ -259,11 +249,7 @@ mod imp {
                             let mut p = windows::core::PWSTR::null();
                             result.GetText(u32::MAX, u32::MAX, true, &mut p, None).is_ok() && !p.is_null() && super::dictated(&text(p))
                         };
-                        let mut ok = (ours && super::accepted(confidence, engine, free.is_some(), ms)) || said;
-                        if ours && !ok && super::faint(confidence, engine, free.is_some(), ms) {
-                            ok = last_faint.is_some_and(|t: std::time::Instant| t.elapsed().as_millis() < super::FAINT_PAIR_MS);
-                            last_faint = if ok { None } else { Some(std::time::Instant::now()) };
-                        }
+                        let ok = (ours && super::accepted(confidence, engine, free.is_some(), ms)) || said;
                         // rien de ce qui est dit n'est écrit : seulement la grammaire touchée
                         crate::voice::journal::write(&format!(
                             "entendu : {}, confiance {confidence}, score {engine:.2}, {ms} ms, accepté {ok}",
@@ -318,17 +304,19 @@ mod tests {
         assert_eq!(sapi_language("fr-FR")[0], "40C");
         assert_eq!(sapi_language("en-US")[0], "409");
         assert!(accepted(1, 0.90, false, 800) && !accepted(0, 0.77, false, 800) && !accepted(1, 0.6, false, 800) && !accepted(-1, 0.9, false, 800));
-        // journal d'un vrai joueur : 0,46 en « faible » passe aussitôt, 0,38 compte pour la répétition
-        assert!(accepted(0, 0.3, true, 800) && accepted(-1, 0.46, true, 700) && !accepted(-1, 0.38, true, 800));
-        assert!(faint(-1, 0.38, true, 800) && !faint(-1, 0.25, true, 800) && !faint(0, 0.6, true, 800) && !faint(-1, 0.9, false, 800));
-        // ses vraies phrases (confiance, score, durée) passent toutes, longues comprises (1.0.17
-        // refusait 2,6 s alors qu'il parlait) ; un son de plus de 3,5 s, jamais
-        for (c, s, ms) in [(0, 0.80, 520), (0, 0.57, 860), (-1, 0.46, 700), (0, 0.74, 740), (1, 0.88, 1300), (0, 0.69, 1040),
-            (1, 0.82, 810), (0, 0.60, 730), (0, 0.64, 370), (0, 0.80, 640), (1, 0.86, 670), (0, 0.61, 550),
-            (0, 0.54, 2920), (0, 0.56, 2280), (0, 0.52, 1520), (0, 0.65, 2240), (0, 0.70, 2620), (-1, 0.42, 920), (0, 0.76, 980)] {
+        // journal d'un vrai joueur, musique ou jeu dans les enceintes, sans qu'il parle (11 h 37 à
+        // 11 h 41) : aucun de ces sons ne garde de clip…
+        for (c, s, ms) in [(0, 0.55, 730), (0, 0.58, 450), (-1, 0.49, 620), (0, 0.58, 290), (0, 0.62, 1160), (-1, 0.46, 530),
+            (0, 0.57, 520), (0, 0.68, 1380), (0, 0.54, 380), (0, 0.61, 670), (0, 0.54, 310), (0, 0.63, 450), (0, 0.65, 980),
+            (0, 0.78, 4360), (-1, 0.37, 560)] {
+            assert!(!accepted(c, s, true, ms), "{c} {s} {ms}");
+        }
+        // … ses phrases nettes, si (haute 0,82 à 0,90 ; normale dès 0,70, jusqu'à 2,6 s)
+        for (c, s, ms) in [(1, 0.90, 580), (1, 0.88, 680), (1, 0.88, 1300), (1, 0.82, 810), (1, 0.86, 670), (0, 0.80, 520),
+            (0, 0.74, 740), (0, 0.76, 980), (0, 0.73, 970), (0, 0.70, 2620), (0, 0.70, 1060)] {
             assert!(accepted(c, s, true, ms), "{c} {s} {ms}");
         }
-        assert!(!accepted(1, 0.9, true, 3600));
+        assert!(!accepted(1, 0.9, true, 3100) && !accepted(-1, 0.9, true, 800));
         for yes in ["Clip ça !", "clip sa", "Clic ça", "clips ça", "Clippe ça.", "ok clip ça"] {
             assert!(dictated(yes), "{yes}");
         }
