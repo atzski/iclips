@@ -34,7 +34,15 @@ pub fn same_device(sapi: &str, endpoint: &str) -> bool {
 /// passe maintenant dès 0,42 (une phrase de dialogue sur sept, en essai, tombe à 0,47 : le
 /// garde-fou de 3 clips en 90 s borne ce risque), et de 0,30 à 0,42 si elle est répétée (`faint`).
 /// Sans dictée (moteur qui ne la propose pas) : « haute » et score 0,8, seuil seul.
-pub fn accepted(confidence: i8, engine: f32, rival: bool) -> bool {
+///
+/// Durée (`ms`) : « Clip ça ! » est court. Dans le journal du joueur, ses vraies phrases durent
+/// 0,37 à 1,3 s ; trois clips partis sans qu'il parle portaient sur 1,25 s (score 0,50), 2,3 s et
+/// 3,4 s (scores 0,88 et 0,78 : un son long que le moteur colle à la phrase). Au-delà de 1,6 s,
+/// jamais ; de 1,1 à 1,6 s, seulement avec un score d'au moins 0,55.
+pub fn accepted(confidence: i8, engine: f32, rival: bool, ms: u32) -> bool {
+    if !short(engine, ms) {
+        return false;
+    }
     if rival {
         confidence >= 0 || engine >= 0.42
     } else {
@@ -42,9 +50,14 @@ pub fn accepted(confidence: i8, engine: f32, rival: bool) -> bool {
     }
 }
 
+/// Durée plausible pour « Clip ça ! » (voir `accepted`).
+fn short(engine: f32, ms: u32) -> bool {
+    ms <= 1_100 || (ms <= 1_600 && engine >= 0.55)
+}
+
 /// « Faible » et en dessous du seuil, mais plausible : comptée pour la répétition (voir `accepted`).
-pub fn faint(confidence: i8, engine: f32, rival: bool) -> bool {
-    rival && confidence < 0 && engine >= 0.30
+pub fn faint(confidence: i8, engine: f32, rival: bool, ms: u32) -> bool {
+    rival && confidence < 0 && engine >= 0.30 && ms <= 1_100
 }
 
 /// Deux « faibles » à moins de 5 s : la seconde est acceptée.
@@ -252,8 +265,8 @@ mod imp {
                             let mut p = windows::core::PWSTR::null();
                             result.GetText(u32::MAX, u32::MAX, true, &mut p, None).is_ok() && !p.is_null() && super::dictated(&text(p))
                         };
-                        let mut ok = (ours && super::accepted(confidence, engine, free.is_some())) || said;
-                        if ours && !ok && super::faint(confidence, engine, free.is_some()) {
+                        let mut ok = (ours && super::accepted(confidence, engine, free.is_some(), ms)) || said;
+                        if ours && !ok && super::faint(confidence, engine, free.is_some(), ms) {
                             ok = last_faint.is_some_and(|t: std::time::Instant| t.elapsed().as_millis() < super::FAINT_PAIR_MS);
                             last_faint = if ok { None } else { Some(std::time::Instant::now()) };
                         }
@@ -310,11 +323,19 @@ mod tests {
         assert!(!same_device("", "Microphone (Yeti Classic)"));
         assert_eq!(sapi_language("fr-FR")[0], "40C");
         assert_eq!(sapi_language("en-US")[0], "409");
-        assert!(accepted(1, 0.90, false) && !accepted(0, 0.77, false) && !accepted(1, 0.6, false) && !accepted(-1, 0.9, false));
-        // avec la dictée : normale aussitôt ; faible dès 0,40 (vraie voix : 0,45) seulement répétée
+        assert!(accepted(1, 0.90, false, 800) && !accepted(0, 0.77, false, 800) && !accepted(1, 0.6, false, 800) && !accepted(-1, 0.9, false, 800));
         // journal d'un vrai joueur : 0,46 en « faible » passe aussitôt, 0,38 compte pour la répétition
-        assert!(accepted(0, 0.3, true) && accepted(-1, 0.46, true) && !accepted(-1, 0.38, true));
-        assert!(faint(-1, 0.38, true) && !faint(-1, 0.25, true) && !faint(0, 0.6, true) && !faint(-1, 0.9, false));
+        assert!(accepted(0, 0.3, true, 800) && accepted(-1, 0.46, true, 700) && !accepted(-1, 0.38, true, 800));
+        assert!(faint(-1, 0.38, true, 800) && !faint(-1, 0.25, true, 800) && !faint(0, 0.6, true, 800) && !faint(-1, 0.9, false, 800));
+        // ses vraies phrases (confiance, score, durée) passent toutes…
+        for (c, s, ms) in [(0, 0.80, 520), (0, 0.57, 860), (-1, 0.46, 700), (0, 0.74, 740), (1, 0.88, 1300), (0, 0.69, 1040),
+            (1, 0.82, 810), (0, 0.60, 730), (0, 0.64, 370), (0, 0.80, 640), (1, 0.86, 670), (0, 0.61, 550)] {
+            assert!(accepted(c, s, true, ms), "{c} {s} {ms}");
+        }
+        // … et pas les trois clips partis sans qu'il parle
+        for (c, s, ms) in [(0, 0.50, 1250), (1, 0.88, 2260), (0, 0.78, 3400)] {
+            assert!(!accepted(c, s, true, ms), "{c} {s} {ms}");
+        }
         for yes in ["Clip ça !", "clip sa", "Clic ça", "clips ça", "Clippe ça.", "ok clip ça"] {
             assert!(dictated(yes), "{yes}");
         }
