@@ -31,33 +31,27 @@ pub fn same_device(sapi: &str, endpoint: &str) -> bool {
 /// concurrente (`rival`), ces sons partent en dictée et la phrase dite au micro sort en « normale »
 /// (0,57 à 0,88 dans le journal d'un vrai joueur en partie), acceptée aussitôt, ou en « faible »
 /// (0,38 à 0,46, la même voix). Jugé trop strict quand une « faible » devait être répétée : elle
-/// passe maintenant dès 0,42 (une phrase de dialogue sur sept, en essai, tombe à 0,47 : le
-/// garde-fou de 3 clips en 90 s borne ce risque), et de 0,30 à 0,42 si elle est répétée (`faint`).
+/// passe maintenant dès 0,40 (une phrase de dialogue sur sept, en essai, tombe à 0,47 : le
+/// garde-fou borne ce risque), et de 0,30 à 0,40 si elle est répétée (`faint`).
 /// Sans dictée (moteur qui ne la propose pas) : « haute » et score 0,8, seuil seul.
 ///
-/// Durée (`ms`) : « Clip ça ! » est court. Dans le journal du joueur, ses vraies phrases durent
-/// 0,37 à 1,3 s ; trois clips partis sans qu'il parle portaient sur 1,25 s (score 0,50), 2,3 s et
-/// 3,4 s (scores 0,88 et 0,78 : un son long que le moteur colle à la phrase). Au-delà de 1,6 s,
-/// jamais ; de 1,1 à 1,6 s, seulement avec un score d'au moins 0,55.
+/// Durée (`ms`) : la limite de 1,6 s de la 1.0.17 refusait de vraies phrases (le journal du joueur
+/// montre sa voix de 0,37 à 2,9 s, dite fort ou traînée en pleine partie). Seul un son de plus de
+/// 3,5 s est écarté. Les rares faux clips restants sont bornés par le garde-fou (`clips_auto.rs`).
 pub fn accepted(confidence: i8, engine: f32, rival: bool, ms: u32) -> bool {
-    if !short(engine, ms) {
+    if ms > 3_500 {
         return false;
     }
     if rival {
-        confidence >= 0 || engine >= 0.42
+        confidence >= 0 || engine >= 0.40
     } else {
         confidence >= 1 && engine >= 0.8
     }
 }
 
-/// Durée plausible pour « Clip ça ! » (voir `accepted`).
-fn short(engine: f32, ms: u32) -> bool {
-    ms <= 1_100 || (ms <= 1_600 && engine >= 0.55)
-}
-
 /// « Faible » et en dessous du seuil, mais plausible : comptée pour la répétition (voir `accepted`).
 pub fn faint(confidence: i8, engine: f32, rival: bool, ms: u32) -> bool {
-    rival && confidence < 0 && engine >= 0.30 && ms <= 1_100
+    rival && confidence < 0 && engine >= 0.30 && ms <= 2_000
 }
 
 /// Deux « faibles » à moins de 5 s : la seconde est acceptée.
@@ -327,15 +321,14 @@ mod tests {
         // journal d'un vrai joueur : 0,46 en « faible » passe aussitôt, 0,38 compte pour la répétition
         assert!(accepted(0, 0.3, true, 800) && accepted(-1, 0.46, true, 700) && !accepted(-1, 0.38, true, 800));
         assert!(faint(-1, 0.38, true, 800) && !faint(-1, 0.25, true, 800) && !faint(0, 0.6, true, 800) && !faint(-1, 0.9, false, 800));
-        // ses vraies phrases (confiance, score, durée) passent toutes…
+        // ses vraies phrases (confiance, score, durée) passent toutes, longues comprises (1.0.17
+        // refusait 2,6 s alors qu'il parlait) ; un son de plus de 3,5 s, jamais
         for (c, s, ms) in [(0, 0.80, 520), (0, 0.57, 860), (-1, 0.46, 700), (0, 0.74, 740), (1, 0.88, 1300), (0, 0.69, 1040),
-            (1, 0.82, 810), (0, 0.60, 730), (0, 0.64, 370), (0, 0.80, 640), (1, 0.86, 670), (0, 0.61, 550)] {
+            (1, 0.82, 810), (0, 0.60, 730), (0, 0.64, 370), (0, 0.80, 640), (1, 0.86, 670), (0, 0.61, 550),
+            (0, 0.54, 2920), (0, 0.56, 2280), (0, 0.52, 1520), (0, 0.65, 2240), (0, 0.70, 2620), (-1, 0.42, 920), (0, 0.76, 980)] {
             assert!(accepted(c, s, true, ms), "{c} {s} {ms}");
         }
-        // … et pas les trois clips partis sans qu'il parle
-        for (c, s, ms) in [(0, 0.50, 1250), (1, 0.88, 2260), (0, 0.78, 3400)] {
-            assert!(!accepted(c, s, true, ms), "{c} {s} {ms}");
-        }
+        assert!(!accepted(1, 0.9, true, 3600));
         for yes in ["Clip ça !", "clip sa", "Clic ça", "clips ça", "Clippe ça.", "ok clip ça"] {
             assert!(dictated(yes), "{yes}");
         }

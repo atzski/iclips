@@ -275,7 +275,7 @@ const EN: Record<string, string> = {
   "« Clip ça ! » vous écoute": "“Clip that!” is listening",
   "Le micro écoute pour « Clip ça ! », sur ce PC seulement.": "The mic listens for “Clip that!”, on this PC only.",
   "« Clip ça ! » en pause": "“Clip that!” paused",
-  "Trois clips à la voix en moins de 90 s : un son du PC ressemble peut-être à la phrase. Désactivez puis réactivez « Clip ça ! » dans iClips.": "Three voice clips in under 90 s: a sound on the PC may sound like the phrase. Turn “Clip that!” off and on again in iClips.",
+  "Six clips à la voix en moins de 2 min : l'écoute fait une pause de 2 min, au cas où un son du PC ressemblerait à la phrase.": "Six voice clips in under 2 min: listening pauses for 2 min, in case a sound on the PC resembles the phrase.",
   "Clip impossible": "Clip failed",
 };
 

@@ -69,10 +69,11 @@ const PAUSE_GRACE_MS: u64 = 1_500;
 /// Après chaque clip gardé, la voix reste sourde 3 s (+ la grâce) : le son de déclencheur de la
 /// notification, entendu par le micro, était pris pour « Clip ça ! » et relançait un clip en boucle.
 const AFTER_CLIP_MS: u64 = 3_000;
-/// Garde-fou : 3 clips à la voix en moins de 90 s mettent « Clip ça ! » en pause jusqu'à ce
-/// qu'on le réactive (un son du PC pris pour la phrase ne peut plus garder des clips sans fin).
-const RUNAWAY_COUNT: usize = 3;
-const RUNAWAY_WINDOW_MS: u64 = 90_000;
+/// Garde-fou : 6 clips à la voix en moins de 2 min mettent « Clip ça ! » en pause 2 min, puis
+/// l'écoute reprend seule (comme iBox 1.0.18).
+const RUNAWAY_COUNT: usize = 6;
+const RUNAWAY_WINDOW_MS: u64 = 120_000;
+const RUNAWAY_PAUSE_MS: u64 = 120_000;
 
 static SETTINGS: Mutex<Option<Auto>> = Mutex::new(None);
 /// Mémoire des clips tenue en ce moment : partie en cours, ou partout si demandé (`capture.rs`).
@@ -86,9 +87,9 @@ static LAST: AtomicU64 = AtomicU64::new(0);
 /// Voix sourde jusqu'à cette heure (ms) : un clip est rejoué dans iClips (`auto.pause`).
 static QUIET_UNTIL: AtomicU64 = AtomicU64::new(0);
 static VOICE_THREAD: AtomicBool = AtomicBool::new(false);
-/// Heures des derniers clips à la voix, et pause du garde-fou (levée par `auto.set`).
+/// Heures des derniers clips à la voix, et fin de la pause du garde-fou (levée aussi par `auto.set`).
 static VOICE_CLIPS: Mutex<Vec<u64>> = Mutex::new(Vec::new());
-static RUNAWAY: AtomicBool = AtomicBool::new(false);
+static RUNAWAY_UNTIL: AtomicU64 = AtomicU64::new(0);
 /// Dernière erreur de l'écoute et langue utilisée, pour iClips.
 static VOICE: Mutex<(Option<String>, Option<String>)> = Mutex::new((None, None));
 /// Micro écouté par « Clip ça ! » : celui choisi dans iClips, `None` : celui par défaut de Windows.
@@ -119,7 +120,7 @@ pub fn set(app: &AppHandle, patch: &Value) -> Result<Value, String> {
     std::fs::write(&f, serde_json::to_vec(&s).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     if let Ok(mut g) = SETTINGS.lock() { *g = Some(s); }
     // toucher aux réglages lève la pause du garde-fou
-    RUNAWAY.store(false, Ordering::Relaxed);
+    RUNAWAY_UNTIL.store(0, Ordering::Relaxed);
     if let Ok(mut v) = VOICE_CLIPS.lock() { v.clear(); }
     if !s.voice {
         // nouvel essai tout de suite à la prochaine activation
@@ -261,7 +262,7 @@ pub fn on_game_end(app: &AppHandle) {
 
 fn want_voice(app: &AppHandle) -> bool {
     TEST_UNTIL.load(Ordering::Relaxed) > now()
-        || (PLAYING.load(Ordering::Relaxed) && armed(app).voice && !RUNAWAY.load(Ordering::Relaxed))
+        || (PLAYING.load(Ordering::Relaxed) && armed(app).voice)
 }
 
 /// Note un clip à la voix à `at` ; vrai s'il fait le compte du garde-fou dans la fenêtre.
@@ -288,7 +289,7 @@ pub(crate) fn heard(app: &AppHandle) {
         eprintln!("iClips : « Clip ça ! » écarté (clip en lecture ou notification de clip)");
         return;
     }
-    if RUNAWAY.load(Ordering::Relaxed) || !armed(app).voice {
+    if RUNAWAY_UNTIL.load(Ordering::Relaxed) > now() || !armed(app).voice {
         return;
     }
     if !PLAYING.load(Ordering::Relaxed) || !take_turn(&LAST, now()) {
@@ -299,9 +300,10 @@ pub(crate) fn heard(app: &AppHandle) {
     std::thread::spawn(move || {
         save(&app, "voice");
         if stop {
-            RUNAWAY.store(true, Ordering::Relaxed);
+            RUNAWAY_UNTIL.store(now() + RUNAWAY_PAUSE_MS, Ordering::Relaxed);
+            if let Ok(mut v) = VOICE_CLIPS.lock() { v.clear(); }
             toast(&app, "« Clip ça ! » en pause",
-                "Trois clips à la voix en moins de 90 s : un son du PC ressemble peut-être à la phrase. Désactivez puis réactivez « Clip ça ! » dans iClips.",
+                "Six clips à la voix en moins de 2 min : l'écoute fait une pause de 2 min, au cas où un son du PC ressemblerait à la phrase.",
                 "sound", "warn");
         }
     });
@@ -412,12 +414,13 @@ mod tests {
     }
 
     #[test]
-    fn trois_clips_a_la_voix_en_90_s_arretent_la_voix() {
+    fn six_clips_a_la_voix_en_2_min_mettent_la_voix_en_pause() {
         let mut t = vec![];
-        assert!(!runaway(&mut t, 10_000));
-        assert!(!runaway(&mut t, 20_000));
-        assert!(runaway(&mut t, 30_000));
-        // espacés de plus de 90 s : jamais de pause
+        for i in 0..5 {
+            assert!(!runaway(&mut t, 10_000 + i * 6_000));
+        }
+        assert!(runaway(&mut t, 50_000));
+        // un clip toutes les 50 s : jamais de pause
         let mut s = vec![];
         for i in 0..10 {
             assert!(!runaway(&mut s, i * 50_000));
