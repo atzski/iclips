@@ -226,12 +226,10 @@ pub fn judge(mic: &[f32], spk: &[f32], phrase: std::ops::Range<usize>, known_gai
     // par moments, ne déplace pas la médiane)
     let ratios: Vec<f32> = (0..ref_end).filter(active).map(|i| mic[i] - db(echo[i])).collect();
     let learned = if ratios.len() >= MIN_ACTIVE { percentile(ratios, 0.5) } else { None };
-    let gain = learned.or(known_gain).or_else(|| {
-        // jamais appris (les enceintes viennent de démarrer) : le plus prudent, le gain qui
-        // explique le mieux le micro pendant la phrase même
-        let r: Vec<f32> = phrase.clone().filter(active).map(|i| mic[i] - db(echo[i])).collect();
-        if r.is_empty() { None } else { percentile(r, 0.25) }
-    });
+    // jamais appris (l'écoute vient de démarrer) : pas d'écho prédit, la phrase n'est comparée
+    // qu'au bruit de fond. Deviner le gain sur la phrase même refusait la vraie voix (essai réel
+    // du 26/11/2026 : « Clip ça ! » dit 4 s après le début de l'écoute, refusé)
+    let gain = learned.or(known_gain);
     // bruit de fond : le bas du micro quand les enceintes se taisent (sinon, prudemment, le bas tout court)
     let quiet: Vec<f32> = (0..ref_end).filter(|i| !active(i)).map(|i| lin(mic[i])).collect();
     let floor = if quiet.len() >= 50 {
@@ -864,13 +862,14 @@ mod tests {
         let mut mic = room(&spk, 4_800, 0.1);
         let hiss = noise(mic.len(), 3);
         add(&mut mic, &hiss, 0, 0.0005);
-        let v = case(&mic, &spk, 12.0, 0.8);
-        assert!(v.speakers && !v.voice(), "{v:?}");
+        // la notification seule, écho jamais appris : rien ne la sépare d'une voix (Vosk ne la
+        // prend pas pour la phrase) ; écho appris : refusée
+        let (m, sp) = (frames(&mic, 48_000), frames(&spk, 48_000));
+        assert!(!judge(&m, &sp, 1_185..1_295, Some(-20.0)).voice());
         add(&mut mic, &voice(0.8), 12 * 48_000, 3.0);
-        // écho jamais appris : prudence, la phrase est refusée ; appris plus tôt (le cas courant :
-        // le contrôle écoute depuis le début de l'écoute), elle passe
+        // écho jamais appris : la voix passe (comparée au bruit de fond) ; appris, elle passe aussi
         let v = case(&mic, &spk, 12.0, 0.8);
-        assert!(!v.voice(), "{v:?}");
+        assert!(v.voice(), "{v:?}");
         let (m, s) = (frames(&mic, 48_000), frames(&spk, 48_000));
         let v = judge(&m, &s, 1_185..1_295, Some(-20.0));
         assert!(v.voice(), "{v:?}");

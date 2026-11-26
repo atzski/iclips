@@ -321,6 +321,11 @@ fn voice_thread(app: &AppHandle) {
     if let Ok(dir) = app.path().app_log_dir() {
         crate::voice::journal::set_dir(dir);
     }
+    // Vosk livré avec l'app (installeur Windows : `resources/vosk`)
+    #[cfg(windows)]
+    if let Ok(dir) = app.path().resource_dir() {
+        crate::voice_vosk::set_dir(dir.join("resources").join("vosk"));
+    }
     std::thread::spawn(move || {
         let mut listener: Option<(voice::Listener, &'static str, Option<String>)> = None;
         loop {

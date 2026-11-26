@@ -1,3 +1,5 @@
 node_modules/
 dist/
 *.key
+# Vosk (« Clip ça ! ») : binaires et modèle récupérés par scripts/get-vosk.ps1, jamais versionnés
+app/src-tauri/resources/vosk/

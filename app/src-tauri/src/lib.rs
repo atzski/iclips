@@ -27,6 +27,7 @@ pub mod shortcut;
 pub mod toast;
 pub mod voice;
 pub mod voice_echo;
+pub mod voice_vosk;
 pub mod voice_sapi;
 pub mod win;
 

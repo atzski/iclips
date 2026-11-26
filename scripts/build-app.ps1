@@ -67,6 +67,9 @@ try {
   try {
     $env:CARGO_ENCODED_RUSTFLAGS = $remaps -join [char]0x1f
     $env:CARGO_TARGET_DIR = $target
+    # Vosk (« Clip ça ! ») livré par l'installeur : versions officielles vérifiées par SHA-256
+    & (Join-Path $PSScriptRoot "get-vosk.ps1")
+    if (-not $?) { throw "Vosk indisponible : impossible de construire l'installeur." }
     npx tauri build --bundles nsis
     if ($LASTEXITCODE -ne 0) { throw "Échec de la compilation Tauri (code $LASTEXITCODE)." }
   } finally {

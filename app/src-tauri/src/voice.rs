@@ -75,8 +75,11 @@ pub fn gate(_mic: &str) -> Option<crate::voice_sapi::Gate> {
     None
 }
 
-/// Écoute en cours : moteur récent (micro par défaut) ou classique (micro choisi).
+/// Écoute en cours : Vosk (français, moteur principal depuis la 1.0.21), sinon moteur classique
+/// de Windows (micro choisi) ou récent (micro par défaut).
 pub enum Listener {
+    #[cfg(windows)]
+    Vosk(crate::voice_vosk::Listener, bool),
     #[cfg(windows)]
     Default(imp::Listener),
     Chosen(crate::voice_sapi::Listener),
@@ -86,6 +89,25 @@ impl Listener {
     /// `mic` : nom Windows du micro choisi dans iClips ; `None` : celui par défaut.
     pub fn start(tag: &str, mic: Option<&str>, on_heard: impl Fn() + Send + Sync + 'static) -> Result<Self, String> {
         let on_heard = std::sync::Arc::new(on_heard);
+        // Vosk d'abord : grammaire fermée et confiance par mot, il ne prend ni « Tac », ni une
+        // conversation, ni la musique pour la phrase (le moteur de Windows, si)
+        #[cfg(windows)]
+        if let Some(dir) = crate::voice_vosk::dir().filter(|_| tag.to_ascii_lowercase().starts_with("fr")) {
+            let mics = crate::remote_play::audio::endpoints(true);
+            let found = match mic {
+                Some(n) => mics.iter().find(|e| crate::voice_sapi::same_device(&e.name, n)),
+                None => mics.iter().find(|e| e.default),
+            };
+            let name = found.map(|e| e.name.clone()).unwrap_or_default();
+            let h = on_heard.clone();
+            match crate::voice_vosk::Listener::start(&dir, tag, found.map(|e| e.id.clone()), if name.is_empty() { None } else { gate(&name) }, move || h()) {
+                Ok(l) => {
+                    journal::write(&format!("écoute : Vosk, micro « {name} » ({}), langue {tag}", if mic.is_some() { "choisi dans iClips" } else { "par défaut" }));
+                    return Ok(Listener::Vosk(l, mic.is_some()));
+                }
+                Err(e) => journal::write(&format!("écoute : Vosk impossible ({e}), moteur de Windows")),
+            }
+        }
         // sans micro choisi, le micro par défaut passe aussi par le moteur classique : son seuil
         // (`voice_sapi::accepted`) est vérifié sur de vrais sons, celui du moteur récent ne peut
         // pas l'être (il n'écoute que le micro). Le moteur récent reste le repli.
@@ -128,6 +150,8 @@ impl Listener {
     pub fn tag(&self) -> &str {
         match self {
             #[cfg(windows)]
+            Listener::Vosk(l, _) => &l.tag,
+            #[cfg(windows)]
             Listener::Default(l) => &l.tag,
             Listener::Chosen(l) => &l.tag,
         }
@@ -137,6 +161,8 @@ impl Listener {
     pub fn alive(&self) -> bool {
         match self {
             #[cfg(windows)]
+            Listener::Vosk(l, _) => l.alive(),
+            #[cfg(windows)]
             Listener::Default(l) => l.alive(),
             Listener::Chosen(l) => l.alive(),
         }
@@ -144,7 +170,13 @@ impl Listener {
 
     /// Micro choisi écouté (moteur classique) plutôt que celui par défaut.
     pub fn on_chosen(&self) -> bool {
-        matches!(self, Listener::Chosen(_))
+        match self {
+            #[cfg(windows)]
+            Listener::Vosk(_, chosen) => *chosen,
+            Listener::Chosen(_) => true,
+            #[cfg(windows)]
+            Listener::Default(_) => false,
+        }
     }
 }
 #[cfg(all(windows, test))]
