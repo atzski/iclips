@@ -109,7 +109,7 @@ export function SettingsSheet({ onClose, focus }: { onClose: () => void; focus?:
               <button key={q.value} type="button" data-nav aria-pressed={s?.quality === q.value} onClick={() => set({ quality: q.value })}
                 className="tone-accent ibox-tile flex flex-col items-start rounded-lg px-4 py-3 text-left text-ink">
                 <span className="text-[0.95rem] font-extrabold">{t(q.label)}</span>
-                <span className={`text-[0.78rem] font-semibold ${s?.quality === q.value ? "opacity-85" : "text-ink-soft"}`}>{q.hint}</span>
+                <span className={`text-[0.78rem] font-semibold ${s?.quality === q.value ? "opacity-85" : "text-ink-soft"}`}>{t("{0} · {1} i/s", ...(q.hint.match(/^(\S+) · (\d+)/)?.slice(1, 3) ?? [q.hint, ""]))}</span>
               </button>
             ))}
           </div>

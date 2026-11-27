@@ -104,6 +104,7 @@ const EN: Record<string, string> = {
   "Standard": "Standard",
   "Haute": "High",
   "Maximale": "Maximum",
+  "{0} · {1} i/s": "{0} · {1} fps",
   "La carte graphique encode l’image, sans ralentir le jeu sur un PC récent.": "The graphics card encodes the picture, without slowing the game on a recent PC.",
   "Son": "Sound",
   "Son de Windows": "Windows sound",
@@ -131,7 +132,7 @@ const EN: Record<string, string> = {
   "Position dans le clip": "Position in the clip",
   "Ce clip n’a qu’une piste de son. Activez « Pistes séparées » dans Réglages : le jeu et le micro se régleront à part sur vos prochains clips.": "This clip has only one sound track. Turn on “Separate tracks” in Settings: the game and the microphone will be set apart on your next clips.",
   "Rétablir": "Reset",
-  "Créer avec ce son": "Make it with this sound",
+  "Créer avec ce son": "Create with this sound",
   "Mixage du son…": "Mixing the sound…",
   "Capture gardée": "Screenshot kept",
   "Garder la capture": "Keep the screenshot",
@@ -317,25 +318,101 @@ const EN: Record<string, string> = {
   "Zoom sur le passage": "Zoom on the passage",
   "Tout le clip": "Whole clip",
   "Voir tout le clip": "Show the whole clip",
-  "Zoom de la frise (dans Couper)": "Zoom the timeline (in Cut)",
+  "Zoom de la frise (dans Couper)": "Zoom the timeline (in Trim)",
   "Zoom : la frise montre {0} à {1}, les poignées avancent d’un dixième de seconde. Z revient à tout le clip.": "Zoom: the timeline shows {0} to {1}, the handles move by a tenth of a second. Z goes back to the whole clip.",
   "Faites glisser les poignées pour choisir le passage (I et O au clavier ; à la manette : gauche et droite sur une poignée ; Z : zoom). Le clip commence sur l’image clé qui précède le début (une par seconde).": "Drag the handles to choose the passage (I and O on the keyboard; on a controller: left and right on a handle; Z: zoom). The clip starts on the keyframe before the start (one per second).",
   "Remplacer l’original": "Replace the original",
   "Le clip coupé prend la place de l’original, effacé une fois le clip prêt.": "The cut clip takes the original's place; the original is erased once the clip is ready.",
-  "Couper le clip": "Cut the clip",
-  "Clip coupé : il remplace l’original.": "Clip cut: it replaces the original.",
+  "Couper le clip": "Trim the clip",
+  "Clip coupé : il remplace l’original.": "Clip trimmed: it replaces the original.",
   "L’original n’a pas pu être effacé : {0}": "The original could not be erased: {0}",
   "Reculer de 5 secondes": "Back 5 seconds",
   "Avancer de 5 secondes": "Forward 5 seconds",
   "Reculer, avancer de 5 secondes": "Back, forward 5 seconds",
   "Choisissez un outil : Couper (C) pour garder un passage ou en faire un GIF, Vertical (V) pour TikTok et Shorts, Son (S) pour régler le jeu et le micro.": "Pick a tool: Trim (C) to keep a passage or make a GIF, Vertical (V) for TikTok and Shorts, Sound (S) to set the game and the mic.",
+  // messages du natif (iBox ou app autonome), traduits par `tm` (0.9.3)
+  "Dossier des clips introuvable.": "Clips folder not found.",
+  "Aucune image à garder.": "No picture to keep.",
+  "Qualité inconnue.": "Unknown quality.",
+  "Un montage prend de 1 à {0} passages.": "An edit takes 1 to {0} passages.",
+  "Passage invalide : il doit durer une demi-seconde au moins.": "Invalid passage: it must last at least half a second.",
+  "Un GIF dure 10 secondes au plus.": "A GIF lasts 10 seconds at most.",
+  "Un GIF dure de 0,5 à 10 secondes.": "A GIF lasts 0.5 to 10 seconds.",
+  "Vidéo illisible.": "Unreadable video.",
+  "Ce clip est déjà vertical.": "This clip is already vertical.",
+  "Seuls les clips vidéo se montent.": "Only video clips can be edited.",
+  "Un montage est déjà en cours.": "An edit is already in progress.",
+  "Media Foundation manque sur ce Windows (édition N : Media Feature Pack).": "Media Foundation is missing from this Windows (N edition: install the Media Feature Pack).",
+  "Ces clips n'ont pas le même format vidéo (qualité différente) : ils ne s'assemblent pas encore.": "These clips don't share the same video format (different quality): they can't be joined yet.",
+  "Passage vide : aucune image clé avant la fin demandée.": "Empty passage: no keyframe before the requested end.",
+  "Les clips démarrent avec la partie : rejouez quelques secondes.": "Clips start with the game: play a few more seconds.",
+  "Pas encore assez d'images : rejouez quelques secondes.": "Not enough frames yet: play a few more seconds.",
+  "Piste de son impossible à écrire : {0}": "Could not write the audio track: {0}",
+  "Clip impossible à écrire : {0}": "Could not write the clip: {0}",
+  "Windows ne sait reconnaître ni le français ni l'anglais sur ce PC (Paramètres Windows › Heure et langue › Langue : reconnaissance vocale).": "Windows can't recognize French or English speech on this PC (Windows Settings › Time & language › Language: speech recognition).",
+  "Appel refusé : {0}": "Call refused: {0}",
+  "Réservé à iBox (compte iNetbox).": "Only available in iBox (iNetbox account).",
+  "Réservé à la fenêtre du plugin.": "Only available in the plugin's window.",
+  "Ce clip dépasse 1 Go : Litterbox ne le prend pas.": "This clip is over 1 GB: Litterbox won't take it.",
+  "Litterbox ne répond pas. Vérifiez la connexion, puis réessayez.": "Litterbox isn't responding. Check your connection, then try again.",
+  "Litterbox a refusé l'envoi ({0}).": "Litterbox refused the upload ({0}).",
+  "Créez d'abord le lien de ce clip.": "Create this clip's link first.",
+  "touche inconnue : « {0} »": "unknown key: “{0}”",
+  "une seule touche en plus des modificateurs": "only one key besides the modifiers",
+  "écoute impossible : {0}": "listening failed: {0}",
+  "La commande vocale n'existe que sous Windows.": "Voice commands are only available on Windows.",
+  "Windows refuse le micro à iClips (Paramètres Windows › Confidentialité › Microphone : autoriser les applications de bureau).": "Windows blocks iClips from using the microphone (Windows Settings › Privacy › Microphone: allow desktop apps).",
+  "Windows refuse le micro à iBox (Paramètres Windows › Confidentialité › Microphone : autoriser les applications de bureau).": "Windows blocks iBox from using the microphone (Windows Settings › Privacy › Microphone: allow desktop apps).",
+  "Aucun micro n'est branché.": "No microphone is plugged in.",
+  "Aucun micro n'est disponible.": "No microphone is available.",
+  "Reconnaissance vocale indisponible (état {0}).": "Speech recognition unavailable (state {0}).",
+  "modèle Vosk illisible ({0})": "unreadable Vosk model ({0})",
+  "grammaire Vosk refusée": "Vosk grammar refused",
+  "Plugin absent ou désactivé.": "Plugin missing or disabled.",
+  "Ce plugin n'a pas d'écran.": "This plugin has no screen.",
 };
 
-export const lang: "fr" | "en" = typeof location !== "undefined" && new URLSearchParams(location.search).get("lang") === "en" ? "en" : "fr";
+/**
+ * Langue de la page : celle d'iBox ou de l'app (`?lang=`). L'anglais est la langue par défaut :
+ * le français seulement s'il est demandé (une ancienne iBox ne passe pas toujours `lang`).
+ */
+export const lang: "fr" | "en" = langOf(typeof location !== "undefined" ? location.search : "");
+
+export function langOf(search: string): "fr" | "en" {
+  return new URLSearchParams(search).get("lang") === "fr" ? "fr" : "en";
+}
 
 export function t(fr: string, ...args: (string | number)[]): string {
   const s = lang === "en" ? (EN[fr] ?? fr) : fr;
   return args.reduce<string>((acc, a, i) => acc.replace(`{${i}}`, String(a)), s);
 }
+
+/** Gabarits du dictionnaire (« Clip impossible à écrire : {0} »), du plus précis au moins précis. */
+let templates: { re: RegExp; en: string; fixed: number }[] | null = null;
+
+/**
+ * Message venu du natif (erreur d'un appel, notification) : texte exact du dictionnaire, ou
+ * gabarit dont les parties variables sont traduites à leur tour. Inconnu : laissé tel quel.
+ */
+export function tm(text: string, to: "fr" | "en" = lang, depth = 0): string {
+  if (to !== "en" || !text) return text;
+  const exact = EN[text.trim()];
+  if (exact !== undefined) return exact;
+  templates ??= Object.entries(EN)
+    .filter(([fr]) => /\{\d\}/.test(fr))
+    .map(([fr, en]) => {
+      const source = fr.split(/\{\d\}/).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("(.+?)");
+      return { re: new RegExp(`^${source}$`, "s"), en, fixed: fr.replace(/\{\d\}/g, "").length };
+    })
+    .sort((a, b) => b.fixed - a.fixed);
+  for (const { re, en } of templates) {
+    const m = re.exec(text.trim());
+    if (m) return en.replace(/\{(\d)\}/g, (_, i: string) => (depth < 2 ? tm(m[Number(i) + 1] ?? "", to, depth + 1) : m[Number(i) + 1] ?? ""));
+  }
+  return text;
+}
+
+/** Clés du dictionnaire (tests de couverture). */
+export const EN_KEYS: ReadonlySet<string> = new Set(Object.keys(EN));
 
 export const locale = lang === "en" ? "en-GB" : "fr-FR";

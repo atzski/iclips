@@ -1,12 +1,17 @@
 {
   "id": "iclips",
   "name": "iClips",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "author": {
     "name": "atzski",
     "username": "atzski"
   },
-  "description": "Le studio de vos clips de jeu : gardez le moment à la voix (« Clip ça ! ») ou à la manette, coupez-le, assemblez, passez en vertical, puis glissez-le dans Discord ou partagez un lien.",
+  "description": "Your game clip studio: save the moment by voice (“Clip that!”) or with the controller, trim it, join clips, go vertical, then drag it into Discord or share a link.",
+  "i18n": {
+    "fr": {
+      "description": "Le studio de vos clips de jeu : gardez le moment à la voix (« Clip ça ! ») ou à la manette, coupez-le, assemblez, passez en vertical, puis glissez-le dans Discord ou partagez un lien."
+    }
+  },
   "ibox": ">=1.0.8",
   "platforms": [
     "windows"

@@ -7,7 +7,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { host, onHost } from "./host";
-import { t } from "./i18n";
+import { t, tm } from "./i18n";
 import { SPRING } from "./ibox/motion";
 import { playClip } from "./shutter";
 import { Icon, type IconName } from "./ui";
@@ -110,8 +110,8 @@ function Card({ toast, dark, onDone }: { toast: Payload; dark: boolean; onDone: 
               iClips
             </span>
           </span>
-          <span data-no-i18n className="mt-1 block truncate font-display text-[1.15rem] leading-tight font-semibold text-ink">{t(toast.name)}</span>
-          <span className="mt-0.5 line-clamp-2 text-[0.82rem] leading-snug font-semibold text-ink-soft">{t(toast.body)}</span>
+          <span data-no-i18n className="mt-1 block truncate font-display text-[1.15rem] leading-tight font-semibold text-ink">{tm(toast.name)}</span>
+          <span className="mt-0.5 line-clamp-2 text-[0.82rem] leading-snug font-semibold text-ink-soft">{tm(toast.body)}</span>
         </span>
         <button
           aria-label={t("Fermer")}

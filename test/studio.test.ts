@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// ces tests lisent les textes en français : page ouverte par une iBox en français
+vi.hoisted(() => {
+  (globalThis as { location?: { search: string } }).location = { search: "?lang=fr" };
+});
+
 import { duration, when } from "../ui/src/format";
 import { pick, type Box } from "../ui/src/nav";
 

@@ -92,7 +92,7 @@ fn windows_lang() -> &'static str {
 }
 #[cfg(not(windows))]
 fn windows_lang() -> &'static str {
-    "fr"
+    "en"
 }
 
 /// Langue et thème de l'interface (comme `plugins::look` dans iBox).

@@ -4,6 +4,7 @@
  * permissions accordées (src-tauri/src/plugins/host.rs). Les vidéos se lisent par
  * `GET /iclips/__clips/<nom>`.
  */
+import { tm } from "./i18n";
 
 export const PLUGIN_ID = "iclips";
 
@@ -202,7 +203,8 @@ export async function host<T>(call: string, arg: Record<string, unknown> = {}): 
   if (!inIbox) return preview(call, arg) as T;
   const res = await fetch(`/${PLUGIN_ID}/__host/${call}`, { method: "POST", body: JSON.stringify(arg) });
   const out = (await res.json()) as { ok?: T; error?: string };
-  if (out.error !== undefined) throw new Error(out.error);
+  // les messages du natif sont en français : traduits ici pour toute l'interface
+  if (out.error !== undefined) throw new Error(tm(out.error));
   return out.ok as T;
 }
 
